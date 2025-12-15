@@ -11,8 +11,5 @@
   <ItemGroup>
     <ProjectReference Include="..\src\Feliz.Router.fsproj" />
   </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Fable.Elmish.React" Version="4.0.0" />
-  </ItemGroup>
   <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>
