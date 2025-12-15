@@ -193,15 +193,9 @@ type IRouterProperty = interface end
 [<AutoOpen>]
 module ReactExtension =
     type React with
-        static member inline memoRender_<'props> (ele: MemoComponent<'props>, props: 'props, ?withKey: 'props -> string) : ReactElement = 
-            if (Interop.isObject (box props) |> not) then
-                Browser.Dom.console.error "React.memoRender: props must be an object."
-            let props = Interop.setKeyOnObj withKey props
-            ReactLegacy.createElement (unbox<ReactElement> ele, props)
-
         /// Initializes the router as an element of the page and starts listening to URL changes.
         static member inline router (props: IRouterProperty list) =
-            React.memoRender_ ( Router.router, unbox<Router.RouterProps> (createObj !!props))
+            React.memoRender ( Router.router, unbox<Router.RouterProps> (createObj !!props))
 
 [<Erase>]
 type router =
