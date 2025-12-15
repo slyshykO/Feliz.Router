@@ -1,20 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
     <Compile Include="AppPath.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\src\Feliz.Router.fsproj" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Fable.Elmish.React" Version="4.0.0" />
   </ItemGroup>
+  <Import Project="..\.paket\Paket.Restore.targets" />
 </Project>

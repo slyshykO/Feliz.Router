@@ -8,10 +8,10 @@
         </PackageIconUrl>
         <PackageTags>fsharp;fable;react;html;router;routing</PackageTags>
         <Authors>Zaid Ajaj</Authors>
-        <Version>4.0.0</Version>
-        <TargetFramework>netstandard2.0</TargetFramework>
+        <Version>5.0.0</Version>
+        <TargetFramework>netstandard2.1</TargetFramework>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <PackageReleaseNotes>Update Feliz dependency to v2.0 and Fable.Elmish to v4.0 (Fable v4 compatible)</PackageReleaseNotes>
+        <PackageReleaseNotes>Update Feliz dependency to v3.0 and Fable.Elmish to v5.0 (Fable v5 compatible)</PackageReleaseNotes>
     </PropertyGroup>
     <ItemGroup>
         <Compile Include="Router.fs" />
