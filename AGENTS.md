@@ -23,7 +23,14 @@ Run commands from the repository root with a .NET SDK and Node.js/npm installed.
 
 Follow surrounding F# code: four-space indentation, camelCase functions and values, and PascalCase modules, types, and union cases. Preserve existing DSL names such as `router`. Use pattern matching and pipelines consistently with nearby code, and add `///` documentation for public APIs. Keep F# files in dependency order in each `.fsproj`.
 
-No repository-wide formatter or lint command is configured. Avoid unrelated formatting changes and do not commit generated `*.fs.js`, bundles, or `bin/` and `obj/` output.
+Use Fantomas to format F# code. Before every commit, check all tracked F# files, fix any reported formatting issues with `fantomas <files>`, and rerun the check until it passes. In PowerShell:
+
+```powershell
+$fsharpFiles = git ls-files '*.fs' '*.fsi' '*.fsx'
+fantomas --check $fsharpFiles
+```
+
+Pass tracked source files explicitly to exclude generated code. Do not commit generated `*.fs.js`, bundles, or `bin/` and `obj/` output.
 
 ## Testing Guidelines
 
