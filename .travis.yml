@@ -1,21 +1,20 @@
 language: csharp
-dotnet: 6.0.400
-dist: trusty
-sudo: required
-addons:
-  apt:
-    sources:
-      - ubuntu-toolchain-r-test
-    packages:
-      - libstdc++-4.9-dev
-      - libunwind8-dev
+mono: none
+dotnet: 10.0.404
+dist: noble
 
 before_install:
-  - nvm install 18.11.0
-  - nvm use 18.11.0
+  - nvm install 26
+  - nvm use 26
+
+install:
+  - dotnet tool restore
+  - dotnet paket restore
+  - npm ci
 
 script:
-  - dotnet tool restore
-  - npm install
+  - dotnet build Feliz.Router.sln --configuration Release
+  - dotnet build build/Build.fsproj --configuration Release
   - npm run build:demo
   - npm test
+  - dotnet pack src/Feliz.Router.fsproj --configuration Release --no-build

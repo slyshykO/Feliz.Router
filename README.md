@@ -333,9 +333,19 @@ If you are using Fable compiler v3, then you should use Feliz.Router v3.10 (late
 
 ### Development
 
+The `update-deps` branch of this fork uses Feliz 3.4, React/ReactDOM 19.3,
+Fable.Core 5.6, FSharp.Core 10, and Fable.Elmish.React 5.6. The library still
+targets `netstandard2.1`; consumers need the updated package dependencies.
+
+Install the .NET 10 LTS SDK specified in `global.json` (10.0.404, with patch roll-forward)
+and Node.js 22.15 or newer. CI uses Node.js 26. The local tool manifest pins Fable,
+Paket, and FAKE. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.
+
 ```bash
-# start by installing dependencies
-npm install
+# restore the checked-in dependency versions
+dotnet tool restore
+dotnet paket restore
+npm ci
 # run tests
 npm test
 
@@ -345,3 +355,12 @@ npm run start:demo
 # build the demo application
 npm run build:demo
 ```
+
+Tests use Fable.Mocha 2.17 with Mocha 12.0.3. Fable.Mocha's embedded npm metadata
+still declares Mocha 8; this fork validates the newer runner with its test suite.
+Check the F# binding and JavaScript runtime together when upgrading either.
+
+Use `dotnet build Feliz.Router.sln --configuration Release` to compile all projects,
+`dotnet build build/Build.fsproj --configuration Release` to check release tooling,
+and `dotnet pack src/Feliz.Router.fsproj --configuration Release --no-build` to
+create the NuGet package locally. The demo runs at `http://localhost:8080`.

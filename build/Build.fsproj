@@ -10,7 +10,7 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Fake.Core.Environment" Version="6.1.4" />
-    <PackageReference Include="Fake.Core.Target" Version="6.1.4" />
+    <PackageReference Include="Fake.Core.Environment" Version="6.2.0" />
+    <PackageReference Include="Fake.Core.Target" Version="6.2.0" />
   </ItemGroup>
 </Project>

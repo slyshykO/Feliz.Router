@@ -2,7 +2,6 @@ module Tests
 
 open Feliz.Router
 open Fable.Mocha
-open Fable.SimpleJson
 
 type test =
     static member pass() = Expect.isTrue true "It must be true"

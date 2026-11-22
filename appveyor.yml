@@ -1,3 +1,5 @@
+image: Visual Studio 2022
+
 init:
   - git config --global core.autocrlf input
 
@@ -5,23 +7,25 @@ build:
   verbosity: detailed
 
 environment:
-  nodejs_version: "18.11.0"
+  nodejs_version: "26"
 
-cache:
- - "%LOCALAPPDATA%\\Yarn"
-
-# Install scripts. (runs after repo cloning)
 install:
-  # install latest dotnet core 3 preview
-  - cmd: choco install dotnetcore-sdk --pre
+  - ps: Install-Product node $env:nodejs_version x64
+  - ps: |
+      $dotnetInstallScript = Join-Path $env:TEMP 'feliz-router-dotnet-install.ps1'
+      Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile $dotnetInstallScript
+      $env:DOTNET_ROOT = Join-Path $env:LOCALAPPDATA 'FelizRouter\dotnet'
+      & $dotnetInstallScript -JSonFile global.json -InstallDir $env:DOTNET_ROOT
+      $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
   - cmd: dotnet tool restore
-  - cmd: npm install
-  # Get the latest stable version of Node.js
-  - ps: Install-Product node $env:nodejs_version
-
-os: Visual Studio 2019
+  - cmd: dotnet paket restore
+  - cmd: npm ci
 
 build_script:
+  - cmd: dotnet build Feliz.Router.sln --configuration Release
+  - cmd: dotnet build build\Build.fsproj --configuration Release
+  - cmd: npm run build:demo
   - cmd: npm test
+  - cmd: dotnet pack src\Feliz.Router.fsproj --configuration Release --no-build
 
 test: off
