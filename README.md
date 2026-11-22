@@ -1,8 +1,8 @@
-# Feliz.Router [![Nuget](https://img.shields.io/nuget/v/Feliz.Router.svg?maxAge=0&colorB=brightgreen)](https://www.nuget.org/packages/Feliz.Router) [![Build status](https://ci.appveyor.com/api/projects/status/qwjte2b9vn43j9ff?svg=true)](https://ci.appveyor.com/project/Zaid-Ajaj/feliz-router)
+# Feliz.Router [![NuGet: alex312.Feliz.Router](https://img.shields.io/nuget/v/alex312.Feliz.Router.svg?maxAge=0&colorB=brightgreen)](https://www.nuget.org/packages/alex312.Feliz.Router) [![CI](https://github.com/slyshykO/Feliz.Router/actions/workflows/ci.yml/badge.svg?branch=update-deps)](https://github.com/slyshykO/Feliz.Router/actions/workflows/ci.yml)
 
 A router component for React and Elmish that is focused, powerful and extremely easy to use.
 
-Here is a full example in [Feliz](https://github.com/Zaid-Ajaj/Feliz)
+Here is a full example in [Feliz](https://github.com/fable-hub/Feliz)
 
 ```fs
 module App
@@ -588,7 +588,7 @@ The router uses `React.useEffectEvent`, requiring React/ReactDOM 19.2 or newer.
 Install the .NET 10 LTS SDK specified in `global.json` (10.0.404, with patch roll-forward)
 and a supported Node.js version: 22.x from 22.22.2, 24.x from 24.15.0, or 26+
 (see `engines` in `package.json`). CI uses Node.js 26. The local tool manifest pins
-Fable, Paket, and FAKE. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.
+Fable, Paket, FAKE, and Fantomas 8.1.3. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.
 
 ```bash
 # restore the checked-in dependency versions
@@ -642,3 +642,25 @@ Use `dotnet build Feliz.Router.sln --configuration Release` to compile all proje
 `dotnet build build/Build.fsproj --configuration Release` to check release tooling,
 and `dotnet pack src/Feliz.Router.fsproj --configuration Release --no-build` to
 create the NuGet package locally. The demo runs at `http://localhost:8080`.
+
+#### Formatting and continuous integration
+
+Use the pinned local formatter after `dotnet tool restore`. In PowerShell:
+
+```powershell
+$fsharpFiles = git ls-files '*.fs' '*.fsi' '*.fsx'
+dotnet fantomas --check $fsharpFiles
+# Fix reported formatting issues, then rerun the check:
+dotnet fantomas $fsharpFiles
+```
+
+Pass tracked files explicitly to avoid formatting generated Fable and build output.
+Include newly created F# files in local checks before they are tracked.
+
+[GitHub Actions CI](.github/workflows/ci.yml) runs on Ubuntu 24.04 for pushes,
+pull requests, and manual dispatches. It installs the .NET SDK from `global.json`
+and Node.js 26, restores the pinned dependencies, checks Fantomas formatting,
+builds the solution, release tooling, and production demo, runs `npm test`, and
+verifies NuGet packaging. The Mocha/jsdom suite runs in the console without an
+installed browser. Browser-only checks remain available locally through
+`npm run test:browser` and `npm run test:demo`.

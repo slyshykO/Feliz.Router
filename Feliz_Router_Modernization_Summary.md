@@ -175,35 +175,15 @@ Query assembly is centralized in `encodePartsWithQuery`, and integer queries reu
 
 Regression coverage exercises all 80 formatting overloads with negative, zero, positive, and `Int32` boundary values; all 148 explicit-history Router/Elmish navigation overloads with `ReplaceState`; and representative default/explicit push navigation with Back traversal. Tests also cover empty queries, escaping, one notification per navigation, and deferred Elmish effects. Before the fix, the new formatting tests reproduced `part.indexOf is not a function` in both route modes.
 
-## Package metadata and stale dependency discussion
+## Package metadata and continuous integration
 
-### `Elmish.Toastr` in `package.json` is **not** a dependency
+**Metadata cleanup: completed.** The earlier `Elmish.Toastr` URL was copied repository metadata, not a dependency. `package.json` and the NuGet repository/license links now point to this fork, while the original author remains credited. The unused `remotedev` dependency has been removed.
 
-The branch's `package.json` includes:
+**CI migration: implemented.** `.github/workflows/ci.yml` replaces `.travis.yml` and `appveyor.yml`. The Ubuntu 24.04 job runs on pushes, pull requests, and manual dispatches with .NET from `global.json` and Node.js 26. It restores tools and dependencies, checks tracked F# files with Fantomas, builds the solution and release tooling, compiles the production demo, runs the console Mocha/jsdom suite, and verifies NuGet packaging. Browser-dependent suites remain local commands.
 
-```json
-"repository": {
-  "type": "git",
-  "url": "https://github.com/Zaid-Ajaj/Elmish.Toastr.git"
-}
-```
+Fantomas 8.1.3 is pinned in `.config/dotnet-tools.json`; `dotnet tool restore` makes the same formatter available locally and in CI. The README documents local formatting commands and links to the new workflow badge. The solution's references to the retired CI files have also been replaced.
 
-This is a repository **metadata URL**, not an npm dependency. It does not install Elmish.Toastr, increase the bundle size, or create compatibility/security exposure to that package. Its update frequency is irrelevant to Feliz.Router. It appears to be an incorrect copy-pasted URL.
-
-Correct the metadata, for example:
-
-```json
-"repository": {
-  "type": "git",
-  "url": "https://github.com/slyshykO/Feliz.Router.git"
-}
-```
-
-Other metadata cleanup:
-
-- `src/Feliz.Router.fsproj` still points `RepositoryUrl` and `PackageLicenseUrl` at the original `Zaid-Ajaj/Feliz.Router` repository. Decide on attribution/publishing intent, then update the relevant package links (while preserving required license and original author attribution).
-- `"remotedev": "^0"` **is** an npm development dependency. Check whether the project still imports or uses it; if unused, consider removing it. Its maintenance status was not verified in this review.
-- Review build tooling/CI configuration for current Fable 5, .NET, Node, and React compatibility.
+**CI validation:** Actionlint 1.7.12 accepts the workflow. A clean source copy passed every workflow command in WLinux (Pengwin/Debian 13), using .NET 10.0.404 and Linux Node.js 26.13.1: tool/dependency restoration, formatting, both .NET builds, the production demo build, all 93 console tests, and NuGet packaging. The GitHub-hosted Ubuntu run will occur after the workflow is pushed. Existing webpack size warnings and NuGet license/readme notices remain.
 
 ## Suggested implementation order
 
@@ -218,7 +198,7 @@ Other metadata cleanup:
 | 3 | Add optional `Router.useRoute()` — **completed** | P2 |
 | 3 | Add examples for Activity, Suspense, ErrorBoundary — **completed** | P2 |
 | 3 | Fix numeric-to-string `unbox` and reduce internal duplication — **completed** | P2/P3 |
-| 3 | Correct npm/NuGet metadata; review `remotedev` and CI | P2 |
+| 3 | Correct metadata, remove unused `remotedev`, and migrate CI to GitHub Actions — **completed** | P2 |
 
 ## Design principles to preserve
 
