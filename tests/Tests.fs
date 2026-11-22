@@ -1,7 +1,43 @@
 module Tests
 
+open Browser.Dom
+open Fable.Core
+open Feliz
 open Feliz.Router
 open Fable.Mocha
+
+[<Import("act", "react")>]
+let private reactAct (callback: unit -> JS.Promise<unit>) : obj = jsNative
+
+// React returns a thenable; Fable's async adapter needs a native Promise.
+[<Emit("Promise.resolve($0)")>]
+let private resolveAct (thenable: obj) : JS.Promise<unit> = jsNative
+
+let private act action =
+    reactAct (fun () ->
+        action()
+        JS.Constructors.Promise.resolve ())
+    |> resolveAct
+    |> Async.AwaitPromise
+
+let private withRoot initialUrl (run: IReactRoot -> Async<unit>) = async {
+    window.history.replaceState(null, "", initialUrl)
+    let container = document.createElement "div"
+    document.body.appendChild container |> ignore
+    let root = ReactDOM.createRoot container
+    let! result = Async.Catch(run root)
+    do! act root.unmount
+    container.remove()
+    window.history.replaceState(null, "", "/")
+    match result with
+    | Choice1Of2 () -> ()
+    | Choice2Of2 error -> return raise error
+}
+
+let private dispatchPopstate () =
+    let ev = document.createEvent "Event"
+    ev.initEvent("popstate", false, false)
+    window.dispatchEvent ev |> ignore
 
 type test =
     static member pass() = Expect.isTrue true "It must be true"
@@ -16,6 +52,102 @@ let itCompiles() = Router.navigate "users"
 
 let routerTests =
     testList "Router tests" [
+        for pathMode in [ false; true ] do
+            for strictMode in [ false; true ] do
+                let modeName = if pathMode then "Path" else "Hash"
+                let strictName = if strictMode then " with Strict Mode" else ""
+                testCaseAsync (sprintf "%s router uses the latest callback%s and cleans up" modeName strictName) <| async {
+                    let notifications = ResizeArray<int * string list>()
+                    let url page = if pathMode then "/" + page else "/#/" + page
+                    let navigate (page: string) =
+                        if pathMode then Router.navigatePath page
+                        else Router.navigate page
+
+                    do! withRoot (url "initial") (fun root -> async {
+                        let render version =
+                            let element = React.router [
+                                if pathMode then router.pathMode else router.hashMode
+                                router.onUrlChanged (fun segments -> notifications.Add(version, segments))
+                            ]
+                            root.render (if strictMode then React.StrictMode [ element ] else element)
+
+                        do! act (fun () -> render 1)
+                        let mountCount = if strictMode then 2 else 1
+                        Expect.equal (List.ofSeq notifications) (List.replicate mountCount (1, [ "initial" ]))
+                            "Mount should report the initial URL, including Strict Mode effect replay"
+                        notifications.Clear()
+
+                        for version in [ 2; 3 ] do
+                            do! act (fun () -> render version)
+                            Expect.isEmpty notifications "Changing callback props should not notify on its own"
+                            do! act (fun () -> navigate "programmatic")
+                            do! act (fun () ->
+                                window.history.replaceState(null, "", url "history")
+                                dispatchPopstate())
+                            Expect.equal (List.ofSeq notifications)
+                                [ (version, [ "programmatic" ]); (version, [ "history" ]) ]
+                                "Custom navigation and popstate should each call only the latest callback once"
+                            notifications.Clear()
+                    })
+
+                    do! act (fun () ->
+                        navigate "after-unmount"
+                        dispatchPopstate())
+                    Expect.isEmpty notifications "Unmount should remove both listeners, including after prop changes"
+                }
+
+        testCaseAsync "Router uses the latest routing mode in both navigation listeners" <| async {
+            let notifications = ResizeArray<string list>()
+            // Keep the callback identity unchanged to isolate routing-mode prop updates.
+            let onUrlChanged segments = notifications.Add segments
+            do! withRoot "/path?source=path#/hash?source=hash" (fun root -> async {
+                let render pathMode = root.render (React.router [
+                    if pathMode then router.pathMode else router.hashMode
+                    router.onUrlChanged onUrlChanged
+                ])
+
+                do! act (fun () -> render false)
+                Expect.equal (List.ofSeq notifications) [ [ "hash"; "?source=hash" ] ]
+                    "The initial notification should read the hash route"
+                notifications.Clear()
+
+                for pathMode in [ true; false ] do
+                    do! act (fun () -> render pathMode)
+                    Expect.isEmpty notifications "Changing the routing mode should not notify on its own"
+                    do! act (fun () ->
+                        window.history.replaceState(null, "", "/path?source=path#/hash?source=hash")
+                        dispatchPopstate())
+                    do! act (fun () -> Router.navigate "custom")
+                    let expected =
+                        if pathMode then [ [ "path"; "?source=path" ]; [ "path"; "?source=path" ] ]
+                        else [ [ "hash"; "?source=hash" ]; [ "custom" ] ]
+                    Expect.equal (List.ofSeq notifications) expected
+                        "Both listeners should interpret the URL using the current routing mode"
+                    notifications.Clear()
+            })
+        }
+
+        testCaseAsync "Router supports adding, removing, and restoring the callback after mount" <| async {
+            let notifications = ResizeArray<string list>()
+            let onUrlChanged segments = notifications.Add segments
+            do! withRoot "/#/initial" (fun root -> async {
+                let render withCallback = root.render (React.router [
+                    if withCallback then router.onUrlChanged onUrlChanged
+                ])
+
+                do! act (fun () -> render false)
+                for withCallback in [ true; false; true ] do
+                    do! act (fun () -> render withCallback)
+                    Expect.isEmpty notifications "Updating the optional callback should not notify on its own"
+                    do! act (fun () -> Router.navigate "next")
+                    do! act dispatchPopstate
+                    let expected = if withCallback then [ [ "next" ]; [ "next" ] ] else []
+                    Expect.equal (List.ofSeq notifications) expected
+                        "Listeners should use the current callback or ignore events when it is absent"
+                    notifications.Clear()
+            })
+        }
+
         testCase "Route.Int works" <| fun _ ->
             match [ "5"; "-1";  "" ] with
             | [ Route.Int 5; Route.Int -1; "" ] -> test.pass()

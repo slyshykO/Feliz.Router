@@ -12,7 +12,7 @@ The highest-value change is fixing potentially stale callbacks in the router's e
 
 ## Baseline observed in `update-deps`
 
-The following values were observed when the branch was reviewed:
+The following values record the initial review, before the dependency update. Completed implementation notes below supersede this baseline.
 
 | Component | Current state in branch |
 | --- | --- |
@@ -31,31 +31,20 @@ Key files: [Router.fs](https://github.com/slyshykO/Feliz.Router/blob/update-deps
 
 ### P0 — Fix stale navigation callbacks using `React.useEffectEvent`
 
-**Observed code:** `Router.fs` creates `onChange` with `React.useCallback(...)` but **without a dependencies array**, then registers that callback inside `React.useEffectOnce(...)`.
+**Status: Implemented.** `src/Router.fs` now creates `onChange` with `React.useEffectEvent`, so the existing listeners read the latest committed `onUrlChanged` callback and routing mode after a re-render.
 
-In React, omitting the `useCallback` dependencies does not memoize the callback. A subscription installed once may retain the first-render closure, potentially reading stale values of `input.onUrlChanged` and `input.hashMode` after props change.
+**Previous bug:** `React.useCallback(...)` had no dependencies array, while `React.useEffectOnce(...)` installed its first-render callback once. Subsequent navigation retained stale `input.onUrlChanged` and `input.hashMode` values.
 
-**Proposed change:** Use `React.useEffectEvent` (introduced in React 19.2 and exposed by Feliz 3.4.0) for event-triggered logic that must see current props while keeping the event subscription lifecycle separate from changing values. An alternative is an effect with explicit dependencies and reliable re-subscription. If the routing mode changes which events are subscribed to, handle that lifecycle explicitly too.
+The subscription and cleanup effects remain one-time effects; each cleanup removes the same listener that its effect installed. Initial route notification and public APIs are preserved. Runtime requirements are React/ReactDOM 19.2+ and Feliz 3.4.0+; this fork uses React 19.3.1.
 
-Illustrative shape (not a tested patch):
+**Regression coverage:** Six mounted-router cases in `tests/Tests.fs` run through the existing Fable.Mocha runner with jsdom and awaited React `act`:
 
-```fsharp
-let onChange =
-    React.useEffectEvent (fun (ev: Event) ->
-        let callback = Option.defaultValue ignore input.onUrlChanged
-        let mode = Option.defaultValue RouteMode.Hash input.hashMode
-        onUrlChange mode callback ev)
+- Repeated callback replacement in Hash and Path modes, with and without Strict Mode.
+- Switching routing modes in both directions while retaining the same callback.
+- Adding, removing, and restoring an optional callback after mount.
+- Custom navigation and `popstate`, initial notification, and cleanup after prop changes and unmount.
 
-React.useEffectOnce (fun () ->
-    window.addEventListener("popstate", onChange)
-    window.addEventListener(customNavigationEvent, onChange)
-
-    FsReact.createDisposable (fun () ->
-        window.removeEventListener("popstate", onChange)
-        window.removeEventListener(customNavigationEvent, onChange)))
-```
-
-This illustrates callback freshness; it does **not** yet include the `hashchange` fix below. Verify the exact effect-event and event-listener behavior with React 19.3 and your generated Fable JS.
+All six cases reproduced the bug before the hook change; all 19 tests pass afterward. The generated Fable JavaScript imports `useEffectEvent` directly and preserves listener identity during cleanup. The separate `hashchange` and deduplication work below remains pending.
 
 ### P0 — Listen to both `hashchange` and `popstate`
 
@@ -82,7 +71,7 @@ The existing `tests/Tests.fs` includes useful parsing and URL formatting tests; 
 7. Exercise both Hash and Path modes, React-only usage, and Elmish dispatch.
 8. Test opt-in transitions separately: synchronous React state changes versus delayed/asynchronous Elmish updates.
 
-A browser-like DOM test runner (such as Vitest and Testing Library with jsdom) may simplify these tests, although real-browser checks are helpful for history/event behavior.
+The callback-freshness work now uses Fable.Mocha with jsdom for mounted-router tests, including routing-mode changes and Strict Mode cleanup. Real-browser history/hash-link checks, deduplication, and the remaining integration cases are follow-up work.
 
 ### P1 — Update Feliz and React dependencies
 
@@ -243,4 +232,4 @@ Other metadata cleanup:
 
 ---
 
-**Verification status:** This document summarizes a static review of GitHub source files and the preceding discussion. No code was modified in the repository, and no Fable build or browser test was run. Code snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
+**Verification status:** The initial document was a static review. The stale-callback fix is now implemented and validated with `npm test` (19 passing tests), `dotnet build Feliz.Router.sln --configuration Release`, and `npm run build:demo`. A production-demo smoke check also passed initial rendering, Elmish navigation, pushState, popstate, and replaceState. DOM checks use jsdom rather than a real browser. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.

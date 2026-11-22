@@ -101,8 +101,8 @@ module Router =
 
     let nav xs (mode: HistoryMode) (routeMode: RouteMode) =
         if mode = HistoryMode.PushState
-        then history.pushState ((), "", encodeParts xs routeMode)
-        else history.replaceState((), "", encodeParts xs routeMode)
+        then history.pushState (null, "", encodeParts xs routeMode)
+        else history.replaceState(null, "", encodeParts xs routeMode)
 
         let ev = document.createEvent("CustomEvent")
 
@@ -152,7 +152,8 @@ module Router =
         |> urlChanged
 
     let router: MemoComponent<RouterProps> = React.memo(fun (input: RouterProps) ->
-        let onChange = React.useCallback(fun (ev: Event) ->
+        // Keep the one-time subscriptions reading the latest committed props.
+        let onChange = React.useEffectEvent(fun (ev: Event) ->
             let urlChanged = Option.defaultValue ignore input.onUrlChanged
             let routeMode = Option.defaultValue RouteMode.Hash input.hashMode
             onUrlChange routeMode urlChanged ev)
