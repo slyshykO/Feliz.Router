@@ -9,6 +9,9 @@
     <Compile Include="App.fs" />
     <Compile Include="Transitions.fs" />
     <Compile Include="RouteHook.fs" />
+    <Compile Include="ExampleLayout.fs" />
+    <Compile Include="ActivityExample.fs" />
+    <Compile Include="AsyncExamples.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>

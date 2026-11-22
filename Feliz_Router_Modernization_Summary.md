@@ -157,13 +157,15 @@ let App () =
 
 **Documentation and coverage:** The README covers Hash/Path usage and limitations. `demo/RouteHook.fs`, available at `/?example=hook#/home`, demonstrates standalone navigation. Fourteen cases in `tests/Tests.fs` with fixtures in `tests/RouteHookApp.fs` cover deep links, queries, PushState/ReplaceState, native links/hash assignment, Back/Forward, selected-URL filtering, duplicate events, callback coexistence, mode changes, memoized segments, subscription identity/cleanup under Strict Mode, multiple consumers, the subscription race, and synchronous Suspense behavior. The production browser smoke test also verifies navigation and reloads in the hook demo.
 
-### P2 — Provide examples for `React.Activity`, Suspense, and ErrorBoundary
+### P2 — More application examples
 
-These can stay in userland rather than core router code:
+**Status: completed.** Three runnable examples compose React features in application code, with shared presentation in `demo/ExampleLayout.fs`. The README explains the patterns and lists every launch URL under **Running examples**. No new router options or dependencies are required.
 
-- **`React.Activity`** (React 19.2): hide an inactive page while preserving its local component state. Useful for tab-like route views. Avoid a global `router.keepAlive true` until cache size, eviction, URL parameters, memory use, and lifecycle semantics are designed.
-- **`React.Suspense` + `React.use'`**: represent loading for cached or externally created Promises during route rendering. Avoid creating a fresh Promise every render.
-- **`React.ErrorBoundary`**: isolate rendering failures of one page and optionally retry or reset when route parameters change (`resetKeys`). Does not catch arbitrary event-handler or async errors.
+- **Activity** — `demo/ActivityExample.fs`, `/?example=activity#/work`: two fixed tab pages preserve local drafts and counters through `React.Activity` (React 19.2+). Native links and Back/Forward select the visible page. A keyboard subscription is removed while a page is hidden and restored on reveal. The retained set is intentionally bounded; reloads reset local state.
+- **Suspense** — `demo/AsyncExamples.fs`, `/?example=suspense#/home`: simulated requests use a module-level Promise cache; page state holds the selected Promise and a child reads it with `React.use'`. A checkbox compares the ordinary loading fallback with `router.useTransitions true` retaining an already revealed page. Draft input stays usable, cached reports can be revisited, and completing an abandoned request does not replace the newer route.
+- **ErrorBoundary** — `demo/AsyncExamples.fs`, `/?example=errors#/home`: both rejected requests and child render failures are isolated to the page. Retry replaces the resource and calls the fallback's `reset`; `resetKeys` uses the report ID and Promise reference to recover on route changes. Navigation and draft state remain available. Arbitrary event-handler/async errors are outside this boundary's scope.
+
+The sample cache covers three fixed reports and resets on reload; production apps need their own data-layer lifetime, invalidation, and cancellation policies. The sample requests make no network calls. `tests/application-examples.cjs` exercises the real production demos with Playwright-controlled timers, allowing only the two deliberate error messages in React's console output. It runs through `npm run test:demo` alongside the existing transition and hook scenarios. Screenshot review also prompted an explicit UTF-8 declaration in the demo HTML.
 
 ### P2/P3 — Review unsafe casts and simplify internal overload handling
 
@@ -214,7 +216,7 @@ Other metadata cleanup:
 | 2 | Add **opt-in** transition behavior; test both React and Elmish — **completed** | P1 |
 | 2 | Document a `ViewTransition` integration example — **completed** | P1 |
 | 3 | Add optional `Router.useRoute()` — **completed** | P2 |
-| 3 | Add examples for Activity, Suspense, ErrorBoundary | P2 |
+| 3 | Add examples for Activity, Suspense, ErrorBoundary — **completed** | P2 |
 | 3 | Fix numeric-to-string `unbox` and reduce internal duplication — **completed** | P2/P3 |
 | 3 | Correct npm/NuGet metadata; review `remotedev` and CI | P2 |
 
@@ -234,8 +236,11 @@ Other metadata cleanup:
 - [React docs: `useSyncExternalStore`](https://react.dev/reference/react/useSyncExternalStore)
 - [React docs: `startTransition`](https://react.dev/reference/react/startTransition)
 - [React docs: `ViewTransition`](https://react.dev/reference/react/ViewTransition)
+- [React docs: `Activity`](https://react.dev/reference/react/Activity)
+- [React docs: `use` and Promise caching](https://react.dev/reference/react/use)
+- [React docs: error boundaries](https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary)
 - [Feliz.Router `update-deps` branch](https://github.com/slyshykO/Feliz.Router/tree/update-deps)
 
 ---
 
-**Verification status:** All listed P0/P1 items, the optional route-reading hook, and the unsafe-cast/overload P2/P3 item are implemented. `npm test` and `npm run test:browser` (Chrome 158) each pass all 93 tests with no skipped cases or browser errors. `npm run test:demo` builds the production demo and passes seven scenarios: six React/Elmish transition scenarios (normal animations, reduced motion, browser API unavailable) and standalone hook navigation. The hook screenshot was reviewed alongside the previously reviewed transition examples. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. Fantomas 8.1.3 checks pass for all 14 repository F# source files. Webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
+**Verification status:** All listed P0/P1 items, the optional route-reading hook, the application examples, and the unsafe-cast/overload P2/P3 item are implemented. `npm test` passes all 93 tests; the unchanged library suite was also verified with `npm run test:browser` in Chrome 158 during the hook work. The production demo build and `tests/run-demo-browser.cjs` pass ten scenarios: six React/Elmish transition scenarios, standalone hook navigation, Activity tabs, Suspense loading, and ErrorBoundary recovery. There are no unexpected browser errors; the error demo deliberately exercises two logged failure types. Screenshots of all three new examples were reviewed. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. Fantomas 8.1.3 checks pass for all 17 repository F# source files. Webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.

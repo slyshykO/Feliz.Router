@@ -20,6 +20,13 @@
 .transition-demo .about { background: #fff0d8; }
 .transition-demo .transition-note { color: #52687b; font-size: 14px; margin-top: 24px; }
 
+.application-example .example-draft, .application-example .workspace-draft { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.application-example .example-draft { padding: 20px; background: #f3f6f9; border-radius: 12px; }
+.application-example .example-option { margin-top: 20px; }
+.application-example textarea { min-height: 110px; padding: 12px; border: 1px solid #9eb1c4; border-radius: 6px; resize: vertical; font: inherit; }
+.application-example .workspace-draft { margin-bottom: 20px; }
+.application-example .route-card button { margin-bottom: 16px; }
+
 /* The application owns the animation. React assigns the transition names. */
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 ::view-transition-group(.route-page) { animation-duration: 240ms; }

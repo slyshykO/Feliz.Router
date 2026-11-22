@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const http = require("node:http");
 const path = require("node:path");
 const { chromium } = require("playwright-core");
+const checkApplicationExamples = require("./application-examples.cjs");
 
 const repository = path.resolve(__dirname, "..");
 
@@ -148,6 +149,7 @@ async function main() {
             for (const mode of ["normal", "reduced", "unsupported"]) await checkExample(browser, origin, example, mode);
         }
         await checkRouteHook(browser, origin);
+        await checkApplicationExamples(browser, origin);
     } finally {
         try { if (browser) await browser.close(); }
         finally {

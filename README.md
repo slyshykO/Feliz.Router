@@ -468,6 +468,64 @@ Back/Forward, and a local text field outside the animated page. Reduced-motion
 preferences disable animated durations. `npm run test:demo` builds and checks both
 examples in Chrome with real animations, reduced motion, and the browser API disabled.
 
+### More application examples
+
+These examples compose React features in application code. Their boundaries,
+resource cache, and retry policies live in `demo/`; they add no router options.
+Launch them using the [running examples](#running-examples) instructions below.
+
+#### Preserving tabs with Activity
+
+[ActivityExample.fs](demo/ActivityExample.fs) keeps two `React.Activity` boundaries
+in fixed positions and changes their `ActivityMode.Visible` / `ActivityMode.Hidden`
+values from `Router.useRoute()`. Write a draft and add points in each tab, then
+switch tabs or use Back/Forward: each page retains its own component state.
+
+Hidden pages keep their DOM and state, but React cleans up their effects and
+reconnects them when revealed. The example's ArrowUp subscription demonstrates
+this: only the visible tab receives points. This requires React 19.2+. State does
+not survive a reload, and hidden DOM can still need explicit cleanup for media
+or other side effects. Keep the retained set bounded; the example has two fixed
+pages, with no global route cache. See React's [Activity reference](https://react.dev/reference/react/Activity).
+
+#### Loading pages with Suspense
+
+[AsyncExamples.SuspenseApp](demo/AsyncExamples.fs) passes a cached Promise to a
+child that reads it with `React.use'`, inside `React.Suspense`. Sample requests
+take 1.2 seconds and make no network calls. The cache lives outside components;
+page state holds the selected Promise so rerenders and suspended retries reuse
+it. A loaded report can be revisited without another loading delay.
+
+With the checkbox off, navigation displays the loading fallback. With it on,
+`router.useTransitions true` keeps the already visible page until its replacement
+is ready. The surrounding draft input stays usable in both cases. An initial
+deep link can still show the fallback because there is no previously revealed
+page to retain. Leaving a pending page does not navigate back when its request
+finishes. See React's [`use` reference](https://react.dev/reference/react/use).
+
+The fixed sample cache is cleared by a full page reload. Real applications should
+use a Suspense-compatible data layer with deliberate cache lifetime, invalidation,
+and cancellation policies; creating a new Promise on every render is unsuitable.
+
+#### Recovering pages with ErrorBoundary
+
+[AsyncExamples.ErrorBoundaryApp](demo/AsyncExamples.fs) wraps only the page in
+Feliz's `React.ErrorBoundary`, leaving navigation and the draft input available.
+Open the unavailable report to reject a Promise, or use **Simulate rendering
+error** on a loaded report to trigger a child render failure.
+
+**Try again** replaces the cached Promise, updates page state, and calls the
+fallback's `reset()` function. Resetting without replacing a rejected Promise
+would immediately fail again. `resetKeys` contains the report ID and Promise
+reference, so navigating to another report also clears the fallback; an arbitrary
+parent rerender does not. Expected demo failures are logged by React in the console.
+
+Error boundaries handle render failures and rejected Promises read through
+`React.use'`. They do not handle arbitrary event-handler or asynchronous callback
+errors, SSR errors, or errors in their own fallback. The simulation button sets
+state; the child throws during its next render. See React's
+[error boundary guidance](https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
 ### Migrating from 2.x to 3.x
 
 The 3.x release refactored the API to be more in line with how Feliz libraries are built as well as using latest features from React like functional components to implement the router itself. This release also made it easy to work with the router from a React-only applications and not just from Elmish based apps.
@@ -505,6 +563,9 @@ open an example:
 | Standalone `Router.useRoute()` hook | [localhost:8080/?example=hook#/home](http://localhost:8080/?example=hook#/home) |
 | React state with ViewTransition | [localhost:8080/?example=transitions#/home](http://localhost:8080/?example=transitions#/home) |
 | Elmish with ViewTransition | [localhost:8080/?example=transitions-elmish#/home](http://localhost:8080/?example=transitions-elmish#/home) |
+| Activity tabs with preserved state | [localhost:8080/?example=activity#/work](http://localhost:8080/?example=activity#/work) |
+| Suspense loading and transitions | [localhost:8080/?example=suspense#/home](http://localhost:8080/?example=suspense#/home) |
+| ErrorBoundary recovery and retry | [localhost:8080/?example=errors#/home](http://localhost:8080/?example=errors#/home) |
 
 All examples share the same server. The `?example=...` query parameter selects
 the application in [demo/Main.fs](demo/Main.fs); the `#/...` fragment selects a
@@ -540,7 +601,7 @@ npm test
 # run the same suite in an installed Chrome browser
 npm run test:browser
 
-# build and verify the hook and ViewTransition demos in Chrome
+# build and verify the hook, transition, and application examples in Chrome
 npm run test:demo
 
 # run the demo application in watch mode
@@ -563,8 +624,12 @@ Fable compiles them into `tests/bin/fable/` so demo builds cannot overwrite thei
 generated router or introduce a second copy of the Fable runtime into the tests.
 `tests/TransitionApp.fs` adds controlled Suspense fixtures for transition opt-in,
 urgent interactions, callback/option changes, and Elmish dispatch/render timing.
-The demo browser runner additionally exercises the actual Fable.Elmish.React renderer
-and browser View Transition API. Its screenshots are saved in `tests/bin/demo-browser/`.
+The demo browser runner additionally exercises the actual Fable.Elmish.React renderer,
+browser View Transition API, and standalone hook. `tests/application-examples.cjs`
+checks Activity state/effect lifecycles, Suspense caching and transition behavior,
+and ErrorBoundary retries and route-key resets. Playwright's clock controls the
+sample request timers; only the two deliberately triggered error messages are
+allowed in these tests. Screenshots are saved in `tests/bin/demo-browser/`.
 
 `npm run test:browser` uses Playwright Core and an installed Chrome; it does not
 download a browser. Set `BROWSER_CHANNEL=msedge` to use installed Edge, or set
