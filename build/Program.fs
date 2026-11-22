@@ -11,7 +11,7 @@ open Fake.Core
 
 let path xs = Path.Combine(Array.ofList xs)
 
-let solutionRoot = Files.findParent __SOURCE_DIRECTORY__ "Feliz.Router.sln"
+let solutionRoot = Files.findParent __SOURCE_DIRECTORY__ "Feliz.Router.slnx"
 
 let router = path [ solutionRoot; "src" ]
 

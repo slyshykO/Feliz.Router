@@ -638,7 +638,9 @@ the same F# suite into `tests/bin/browser/`, serves it on a temporary local port
 and fails on test failures or browser runtime/console errors. Fable.Mocha's browser
 runner waits one second before each test, so this run is slower than `npm test`.
 
-Use `dotnet build Feliz.Router.sln --configuration Release` to compile all projects,
+The solution uses `.slnx` and includes the library, tests, demo, and release tooling;
+use Ionide 8.1.0 or newer in VS Code.
+Use `dotnet build Feliz.Router.slnx --configuration Release` to compile all projects,
 `dotnet build build/Build.fsproj --configuration Release` to check release tooling,
 and `dotnet pack src/Feliz.Router.fsproj --configuration Release --no-build` to
 create the NuGet package locally. The demo runs at `http://localhost:8080`.

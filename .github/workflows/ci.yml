@@ -52,10 +52,7 @@ jobs:
         run: npm ci
 
       - name: Build solution
-        run: dotnet build Feliz.Router.sln --configuration Release
-
-      - name: Build release tooling
-        run: dotnet build build/Build.fsproj --configuration Release
+        run: dotnet build Feliz.Router.slnx --configuration Release
 
       - name: Build production demo
         run: npm run build:demo
