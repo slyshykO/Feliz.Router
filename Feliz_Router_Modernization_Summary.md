@@ -23,7 +23,7 @@ The following values record the initial review, before the dependency update. Co
 | Routing modes | Hash and Path |
 | Navigation notification | `onUrlChanged` and custom `CUSTOM_NAVIGATION_EVENT` |
 | Elmish integration | `Cmd.navigate` and `Cmd.navigatePath` |
-| Core implementation | `src/Router.fs` (about 1,481 lines, with many navigation overloads) |
+| Core implementation | `src/Router.fs` (routing helpers and public navigation overloads) |
 
 Key files: [Router.fs](https://github.com/slyshykO/Feliz.Router/blob/update-deps/src/Router.fs), [package.json](https://github.com/slyshykO/Feliz.Router/blob/update-deps/package.json), [paket.dependencies](https://github.com/slyshykO/Feliz.Router/blob/update-deps/paket.dependencies), [Feliz.Router.fsproj](https://github.com/slyshykO/Feliz.Router/blob/update-deps/src/Feliz.Router.fsproj), and [Tests.fs](https://github.com/slyshykO/Feliz.Router/blob/update-deps/tests/Tests.fs).
 
@@ -64,7 +64,7 @@ Explicit `Router.navigate(...)` / `Router.navigatePath(...)` calls retain their 
 
 ### P0 — Add React/DOM integration tests
 
-**Status: Implemented.** `tests/Tests.fs` now contains 39 tests: 13 parsing/formatting tests and 26 mounted-router/application cases. `tests/IntegrationApp.fs` supplies a React `useState` application and a real Elmish program with a test-owned React root, dispatch queue, update function, and navigation commands.
+**Status: Implemented.** This step expanded `tests/Tests.fs` to 39 tests: 13 parsing/formatting tests and 26 mounted-router/application cases. `tests/IntegrationApp.fs` supplies a React `useState` application and a real Elmish program with a test-owned React root, dispatch queue, update function, and navigation commands.
 
 Coverage includes:
 
@@ -78,7 +78,7 @@ Coverage includes:
 
 Run `npm test` for Mocha/jsdom or `npm run test:browser` for the same F# suite in an installed Chrome browser. The checked-in Playwright Core runner also supports Edge through `BROWSER_CHANNEL=msedge` and custom Chromium executables through `BROWSER_EXECUTABLE_PATH`. It discovers the test count, waits for sequential completion, reports failures and browser errors, and closes the browser and local server.
 
-Generated files remain isolated in `tests/bin/fable/` and `tests/bin/browser/`. All 39 cases pass in both runners. Transition-specific coverage is tracked with the P1 transition feature below.
+Generated files remain isolated in `tests/bin/fable/` and `tests/bin/browser/`. Both runners execute the same suite, subsequently expanded to 52 tests by the numeric-overload work below. Transition-specific coverage is tracked with the P1 transition feature below.
 
 ### P1 — Update Feliz and React dependencies
 
@@ -92,7 +92,7 @@ The dependency declarations and committed lockfiles now agree:
 | React | `^19.3.1` in `package.json` | 19.3.1 |
 | ReactDOM | `^19.3.1` in `package.json` | 19.3.1 |
 
-Both `paket.lock` and `package-lock.json` were updated. The upgraded dependencies have passed the Release solution build, production demo build, and the current 39-test suite under Mocha/jsdom and headless Chrome. The router's `useEffectEvent` runtime requirement is documented in the README.
+Both `paket.lock` and `package-lock.json` were updated. The upgraded dependencies have passed the Release solution build, production demo build, and the current 52-test suite under Mocha/jsdom and headless Chrome. The router's `useEffectEvent` runtime requirement is documented in the README.
 
 ### P1 — Offer opt-in React transitions for route updates
 
@@ -157,9 +157,11 @@ These can stay in userland rather than core router code:
 
 ### P2/P3 — Review unsafe casts and simplify internal overload handling
 
-`Router.fs` contains several expressions like `unbox<string> segment2` where `segment2` is an `int`. This is not normal numeric formatting in .NET; replace with `string segment2` where textual conversion is intended, and test generated URLs.
+**Status: completed.** Integer route segments and query values now use `string` conversion. The remaining `unbox`/`!!` expressions are intentional React property/object interop; there are no numeric-to-string casts left.
 
-The file has many similar overloads for `format`, `navigate`, `navigatePath`, and Elmish `Cmd` wrappers. Keep public overloads for source compatibility, but centralize encoding and navigation logic in a smaller number of internal helpers. This reduces repetition and copy/paste mistakes without forcing consumers to change code.
+Query assembly is centralized in `encodePartsWithQuery`, and integer queries reuse the string query encoder. `navigate`/`navigatePath` reuse `format`/`formatPath` and a single history/event helper; Elmish wrappers forward typed arguments and defer navigation until command execution. All 384 formatting/navigation overload declarations are preserved, including parameter names, `ParamArray`, and `inline` modifiers. Existing full-path and query handling is retained.
+
+Regression coverage exercises all 80 formatting overloads with negative, zero, positive, and `Int32` boundary values; all 148 explicit-history Router/Elmish navigation overloads with `ReplaceState`; and representative default/explicit push navigation with Back traversal. Tests also cover empty queries, escaping, one notification per navigation, and deferred Elmish effects. Before the fix, the new formatting tests reproduced `part.indexOf is not a function` in both route modes.
 
 ## Package metadata and stale dependency discussion
 
@@ -203,7 +205,7 @@ Other metadata cleanup:
 | 2 | Publish a `ViewTransition` integration example | P1 |
 | 3 | Explore additive `Router.useLocation()` / `useRoute()` | P2 |
 | 3 | Add examples for Activity, Suspense, ErrorBoundary | P2 |
-| 3 | Fix numeric-to-string `unbox` and reduce internal duplication | P2/P3 |
+| 3 | Fix numeric-to-string `unbox` and reduce internal duplication — **completed** | P2/P3 |
 | 3 | Correct npm/NuGet metadata; review `remotedev` and CI | P2 |
 
 ## Design principles to preserve
@@ -226,4 +228,4 @@ Other metadata cleanup:
 
 ---
 
-**Verification status:** The dependency-update P1 and all three P0 items are implemented. `npm test` and `npm run test:browser` (Chrome 158) each pass all 39 tests with no skipped cases or browser errors. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. The production demo build and navigation smoke check passed during the preceding routing fix; webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
+**Verification status:** The dependency-update P1, all three P0 items, and the unsafe-cast/overload P2/P3 item are implemented. `npm test` and `npm run test:browser` (Chrome 158) each pass all 52 tests with no skipped cases or browser errors. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. `npm run build:demo` and a production-demo smoke check of numeric query navigation, push/replace, Back, and native hash links pass; webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.

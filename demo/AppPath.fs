@@ -27,7 +27,8 @@ let update msg state =
     | UrlChanged segments -> { state with CurrentUrl = segments }, Cmd.none
     | NavigateUsers -> state, Cmd.navigatePath ("users")
     | NavigateToUser userId -> state, Cmd.navigatePath ("users", [ ("id", userId) ])
-    | NavigateToUserReplaceState userId -> state, Cmd.navigatePath ("users", [ ("id", userId) ], HistoryMode.ReplaceState)
+    | NavigateToUserReplaceState userId ->
+        state, Cmd.navigatePath ("users", [ ("id", userId) ], HistoryMode.ReplaceState)
 
 let render state dispatch =
     let currentPage =

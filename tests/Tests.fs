@@ -96,6 +96,461 @@ type test =
 
 let itCompiles () = Router.navigate "users"
 
+// Each row calls a distinct public overload; expected URLs do not use router helpers.
+let private formatOverloadCases number numberText =
+    let textQuery = [ "q", "Jane & Doe"; "tag", "a/b" ]
+    let intQuery = [ "page size", number; "zero", 0 ]
+
+    [
+        ("team%20space/details"),
+        (fun () -> Router.format ([| "team space"; "details" |])),
+        (fun () -> Router.formatPath ([| "team space"; "details" |]))
+
+        ("team%20space/details?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ([ "team space"; "details" ], textQuery)),
+        (fun () -> Router.formatPath ([ "team space"; "details" ], textQuery))
+
+        ("team?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team", textQuery)),
+        (fun () -> Router.formatPath ("team", textQuery))
+
+        ("team?page%20size=" + numberText + "&zero=0"),
+        (fun () -> Router.format ("team", intQuery)),
+        (fun () -> Router.formatPath ("team", intQuery))
+
+        ("team%20space/part2?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", "part2", textQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", textQuery))
+
+        ("team%20space/part2?page%20size=" + numberText + "&zero=0"),
+        (fun () -> Router.format ("team space", "part2", intQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", intQuery))
+
+        ("team%20space/part2/" + numberText + "?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", "part2", number, textQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", number, textQuery))
+
+        ("team%20space/part2/" + numberText + "?page%20size=" + numberText + "&zero=0"),
+        (fun () -> Router.format ("team space", "part2", number, intQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", number, intQuery))
+
+        ("team%20space/part2/part3?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", "part2", "part3", textQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", "part3", textQuery))
+
+        ("team%20space/part2/part3?page%20size=" + numberText + "&zero=0"),
+        (fun () -> Router.format ("team space", "part2", "part3", intQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", "part3", intQuery))
+
+        ("team%20space/" + numberText + "/part3?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", number, "part3", textQuery)),
+        (fun () -> Router.formatPath ("team space", number, "part3", textQuery))
+
+        ("team%20space/" + numberText + "/part3?page%20size=" + numberText + "&zero=0"),
+        (fun () -> Router.format ("team space", number, "part3", intQuery)),
+        (fun () -> Router.formatPath ("team space", number, "part3", intQuery))
+
+        ("team%20space/part2/part3/part4?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", "part2", "part3", "part4", textQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", "part3", "part4", textQuery))
+
+        ("team%20space/part2/part3/part4?page%20size=" + numberText + "&zero=0"),
+        (fun () -> Router.format ("team space", "part2", "part3", "part4", intQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", "part3", "part4", intQuery))
+
+        ("team%20space/part2/part3/part4/part5?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", "part2", "part3", "part4", "part5", textQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", "part3", "part4", "part5", textQuery))
+
+        ("team%20space/part2/part3/part4/part5?page%20size=" + numberText + "&zero=0"),
+        (fun () -> Router.format ("team space", "part2", "part3", "part4", "part5", intQuery)),
+        (fun () -> Router.formatPath ("team space", "part2", "part3", "part4", "part5", intQuery))
+
+        ("team%20space/" + numberText + "/part3/part4?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", number, "part3", "part4", textQuery)),
+        (fun () -> Router.formatPath ("team space", number, "part3", "part4", textQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/part3/part4?page%20size="
+         + numberText
+         + "&zero=0"),
+        (fun () -> Router.format ("team space", number, "part3", "part4", intQuery)),
+        (fun () -> Router.formatPath ("team space", number, "part3", "part4", intQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/"
+         + numberText
+         + "/part4?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", number, number, "part4", textQuery)),
+        (fun () -> Router.formatPath ("team space", number, number, "part4", textQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/"
+         + numberText
+         + "/part4?page%20size="
+         + numberText
+         + "&zero=0"),
+        (fun () -> Router.format ("team space", number, number, "part4", intQuery)),
+        (fun () -> Router.formatPath ("team space", number, number, "part4", intQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/"
+         + numberText
+         + "/part4/part5/part6?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", number, number, "part4", "part5", "part6", textQuery)),
+        (fun () -> Router.formatPath ("team space", number, number, "part4", "part5", "part6", textQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/"
+         + numberText
+         + "/part4/part5/part6?page%20size="
+         + numberText
+         + "&zero=0"),
+        (fun () -> Router.format ("team space", number, number, "part4", "part5", "part6", intQuery)),
+        (fun () -> Router.formatPath ("team space", number, number, "part4", "part5", "part6", intQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/"
+         + numberText
+         + "/"
+         + numberText
+         + "/part5?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", number, number, number, "part5", textQuery)),
+        (fun () -> Router.formatPath ("team space", number, number, number, "part5", textQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/"
+         + numberText
+         + "/"
+         + numberText
+         + "/part5?page%20size="
+         + numberText
+         + "&zero=0"),
+        (fun () -> Router.format ("team space", number, number, number, "part5", intQuery)),
+        (fun () -> Router.formatPath ("team space", number, number, number, "part5", intQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/part3/"
+         + numberText
+         + "/part5?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", number, "part3", number, "part5", textQuery)),
+        (fun () -> Router.formatPath ("team space", number, "part3", number, "part5", textQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/part3/"
+         + numberText
+         + "/part5?page%20size="
+         + numberText
+         + "&zero=0"),
+        (fun () -> Router.format ("team space", number, "part3", number, "part5", intQuery)),
+        (fun () -> Router.formatPath ("team space", number, "part3", number, "part5", intQuery))
+
+        ("team%20space/" + numberText + "/part3/part4/part5?q=Jane%20%26%20Doe&tag=a%2Fb"),
+        (fun () -> Router.format ("team space", number, "part3", "part4", "part5", textQuery)),
+        (fun () -> Router.formatPath ("team space", number, "part3", "part4", "part5", textQuery))
+
+        ("team%20space/"
+         + numberText
+         + "/part3/part4/part5?page%20size="
+         + numberText
+         + "&zero=0"),
+        (fun () -> Router.format ("team space", number, "part3", "part4", "part5", intQuery)),
+        (fun () -> Router.formatPath ("team space", number, "part3", "part4", "part5", intQuery))
+
+        ("team%20space/details?raw=a%2Fb"),
+        (fun () -> Router.format ("/team%20space/details?raw=a%2Fb")),
+        (fun () -> Router.formatPath ("/team%20space/details?raw=a%2Fb"))
+
+        ("team%20space/details"),
+        (fun () -> Router.format ([ "team space"; "details" ])),
+        (fun () -> Router.formatPath ([ "team space"; "details" ]))
+
+        ("team%20space/" + numberText + ""),
+        (fun () -> Router.format ("team space", number)),
+        (fun () -> Router.formatPath ("team space", number))
+
+        ("team%20space/" + numberText + "/" + numberText + ""),
+        (fun () -> Router.format ("team space", number, number)),
+        (fun () -> Router.formatPath ("team space", number, number))
+
+        ("team%20space/part2/" + numberText + ""),
+        (fun () -> Router.format ("team space", "part2", number)),
+        (fun () -> Router.formatPath ("team space", "part2", number))
+
+        ("team%20space/" + numberText + "/part3"),
+        (fun () -> Router.format ("team space", number, "part3")),
+        (fun () -> Router.formatPath ("team space", number, "part3"))
+
+        ("team%20space/" + numberText + "/part3/" + numberText + ""),
+        (fun () -> Router.format ("team space", number, "part3", number)),
+        (fun () -> Router.formatPath ("team space", number, "part3", number))
+
+        ("team%20space/" + numberText + "/part3/" + numberText + "/part5"),
+        (fun () -> Router.format ("team space", number, "part3", number, "part5")),
+        (fun () -> Router.formatPath ("team space", number, "part3", number, "part5"))
+
+        ("team%20space/" + numberText + "/part3/" + numberText + "/part5/part6"),
+        (fun () -> Router.format ("team space", number, "part3", number, "part5", "part6")),
+        (fun () -> Router.formatPath ("team space", number, "part3", number, "part5", "part6"))
+
+        ("team%20space/"
+         + numberText
+         + "/part3/"
+         + numberText
+         + "/part5/"
+         + numberText
+         + ""),
+        (fun () -> Router.format ("team space", number, "part3", number, "part5", number)),
+        (fun () -> Router.formatPath ("team space", number, "part3", number, "part5", number))
+
+        ("team%20space/" + numberText + "/" + numberText + "/" + numberText + ""),
+        (fun () -> Router.format ("team space", number, number, number)),
+        (fun () -> Router.formatPath ("team space", number, number, number))
+
+        ("team%20space/" + numberText + "/" + numberText + "/part4"),
+        (fun () -> Router.format ("team space", number, number, "part4")),
+        (fun () -> Router.formatPath ("team space", number, number, "part4"))
+
+    ]
+
+let private navigationOverloadCases mode =
+    let textQuery = [ "q", "Jane & Doe"; "tag", "a/b" ]
+    let intQuery = [ "page size", -42; "zero", 0 ]
+
+    [
+        "team?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team", textQuery, mode))
+
+        "team?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team", intQuery, mode))
+
+        "team%20space/part2?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", "part2", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", textQuery, mode))
+
+        "team%20space/part2?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", "part2", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", intQuery, mode))
+
+        "team%20space/part2/-42?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", "part2", -42, textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", -42, textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", -42, textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", -42, textQuery, mode))
+
+        "team%20space/part2/-42?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", "part2", -42, intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", -42, intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", -42, intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", -42, intQuery, mode))
+
+        "team%20space/part2/part3?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", "part2", "part3", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", "part3", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", "part3", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", "part3", textQuery, mode))
+
+        "team%20space/part2/part3?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", "part2", "part3", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", "part3", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", "part3", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", "part3", intQuery, mode))
+
+        "team%20space/-42/part3?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", -42, "part3", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", textQuery, mode))
+
+        "team%20space/-42/part3?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", -42, "part3", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", intQuery, mode))
+
+        "team%20space/part2/part3/part4?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", "part2", "part3", "part4", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", "part3", "part4", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", "part3", "part4", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", "part3", "part4", textQuery, mode))
+
+        "team%20space/part2/part3/part4?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", "part2", "part3", "part4", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", "part3", "part4", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", "part3", "part4", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", "part3", "part4", intQuery, mode))
+
+        "team%20space/part2/part3/part4/part5?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", "part2", "part3", "part4", "part5", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", "part3", "part4", "part5", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", "part3", "part4", "part5", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", "part3", "part4", "part5", textQuery, mode))
+
+        "team%20space/part2/part3/part4/part5?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", "part2", "part3", "part4", "part5", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", "part3", "part4", "part5", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", "part3", "part4", "part5", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", "part3", "part4", "part5", intQuery, mode))
+
+        "team%20space/-42/part3/part4?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", -42, "part3", "part4", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", "part4", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", "part4", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", "part4", textQuery, mode))
+
+        "team%20space/-42/part3/part4?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", -42, "part3", "part4", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", "part4", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", "part4", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", "part4", intQuery, mode))
+
+        "team%20space/-42/-42/part4?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", -42, -42, "part4", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, "part4", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, "part4", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, "part4", textQuery, mode))
+
+        "team%20space/-42/-42/part4?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", -42, -42, "part4", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, "part4", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, "part4", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, "part4", intQuery, mode))
+
+        "team%20space/-42/-42/part4/part5/part6?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", -42, -42, "part4", "part5", "part6", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, "part4", "part5", "part6", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, "part4", "part5", "part6", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, "part4", "part5", "part6", textQuery, mode))
+
+        "team%20space/-42/-42/part4/part5/part6?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", -42, -42, "part4", "part5", "part6", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, "part4", "part5", "part6", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, "part4", "part5", "part6", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, "part4", "part5", "part6", intQuery, mode))
+
+        "team%20space/-42/-42/-42/part5?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", -42, -42, -42, "part5", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, -42, "part5", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, -42, "part5", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, -42, "part5", textQuery, mode))
+
+        "team%20space/-42/-42/-42/part5?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", -42, -42, -42, "part5", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, -42, "part5", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, -42, "part5", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, -42, "part5", intQuery, mode))
+
+        "team%20space/-42/part3/-42/part5?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", -42, "part3", -42, "part5", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", -42, "part5", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", -42, "part5", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", -42, "part5", textQuery, mode))
+
+        "team%20space/-42/part3/-42/part5?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", -42, "part3", -42, "part5", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", -42, "part5", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", -42, "part5", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", -42, "part5", intQuery, mode))
+
+        "team%20space/-42/part3/part4/part5?q=Jane%20%26%20Doe&tag=a%2Fb",
+        (fun () -> Router.navigate ("team space", -42, "part3", "part4", "part5", textQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", "part4", "part5", textQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", "part4", "part5", textQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", "part4", "part5", textQuery, mode))
+
+        "team%20space/-42/part3/part4/part5?page%20size=-42&zero=0",
+        (fun () -> Router.navigate ("team space", -42, "part3", "part4", "part5", intQuery, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", "part4", "part5", intQuery, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", "part4", "part5", intQuery, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", "part4", "part5", intQuery, mode))
+
+        "team%20space/details?raw=a%2Fb",
+        (fun () -> Router.navigate ("/team%20space/details?raw=a%2Fb", mode)),
+        (fun () -> Router.navigatePath ("/team%20space/details?raw=a%2Fb", mode)),
+        (fun () -> Cmd.navigate ("/team%20space/details?raw=a%2Fb", mode)),
+        (fun () -> Cmd.navigatePath ("/team%20space/details?raw=a%2Fb", mode))
+
+        "team%20space/-42",
+        (fun () -> Router.navigate ("team space", -42, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, mode))
+
+        "team%20space/-42/-42",
+        (fun () -> Router.navigate ("team space", -42, -42, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, mode))
+
+        "team%20space/part2/-42",
+        (fun () -> Router.navigate ("team space", "part2", -42, mode)),
+        (fun () -> Router.navigatePath ("team space", "part2", -42, mode)),
+        (fun () -> Cmd.navigate ("team space", "part2", -42, mode)),
+        (fun () -> Cmd.navigatePath ("team space", "part2", -42, mode))
+
+        "team%20space/-42/part3",
+        (fun () -> Router.navigate ("team space", -42, "part3", mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", mode))
+
+        "team%20space/-42/part3/-42",
+        (fun () -> Router.navigate ("team space", -42, "part3", -42, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", -42, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", -42, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", -42, mode))
+
+        "team%20space/-42/part3/-42/part5",
+        (fun () -> Router.navigate ("team space", -42, "part3", -42, "part5", mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", -42, "part5", mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", -42, "part5", mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", -42, "part5", mode))
+
+        "team%20space/-42/part3/-42/part5/part6",
+        (fun () -> Router.navigate ("team space", -42, "part3", -42, "part5", "part6", mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", -42, "part5", "part6", mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", -42, "part5", "part6", mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", -42, "part5", "part6", mode))
+
+        "team%20space/-42/part3/-42/part5/-42",
+        (fun () -> Router.navigate ("team space", -42, "part3", -42, "part5", -42, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, "part3", -42, "part5", -42, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, "part3", -42, "part5", -42, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, "part3", -42, "part5", -42, mode))
+
+        "team%20space/-42/-42/-42",
+        (fun () -> Router.navigate ("team space", -42, -42, -42, mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, -42, mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, -42, mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, -42, mode))
+
+        "team%20space/-42/-42/part4",
+        (fun () -> Router.navigate ("team space", -42, -42, "part4", mode)),
+        (fun () -> Router.navigatePath ("team space", -42, -42, "part4", mode)),
+        (fun () -> Cmd.navigate ("team space", -42, -42, "part4", mode)),
+        (fun () -> Cmd.navigatePath ("team space", -42, -42, "part4", mode))
+
+    ]
+
 let routerTests =
     testList
         "Router tests"
@@ -687,6 +1142,217 @@ let routerTests =
                                 "The second router should independently receive it once"
                         })
             }
+
+            for pathMode in [ false; true ] do
+                let modeName = if pathMode then "Path" else "Hash"
+
+                testCase (sprintf "All format overloads convert numeric segments in %s mode" modeName)
+                <| fun _ ->
+                    for number, numberText in
+                        [
+                            System.Int32.MinValue, "-2147483648"
+                            -1, "-1"
+                            0, "0"
+                            42, "42"
+                            System.Int32.MaxValue, "2147483647"
+                        ] do
+                        for expected, hashFormat, pathFormat in formatOverloadCases number numberText do
+                            let actual = if pathMode then pathFormat () else hashFormat ()
+                            let prefix = if pathMode then "/" else "#/"
+
+                            Expect.equal
+                                actual
+                                (prefix + expected)
+                                (sprintf "Formatting %s with integer %d" expected number)
+
+                testCase (sprintf "Empty queries and preformatted paths keep their behavior in %s mode" modeName)
+                <| fun _ ->
+                    let textQuery: (string * string) list = []
+                    let intQuery: (string * int) list = []
+                    let query = [ "city", "Київ"; "token", "a&b=c/#" ]
+
+                    let cases =
+                        [
+                            "", Router.format (), Router.formatPath ()
+                            "", Router.format ([]: string list), Router.formatPath ([]: string list)
+                            "", Router.format ([], textQuery), Router.formatPath ([], textQuery)
+                            "?city=%D0%9A%D0%B8%D1%97%D0%B2&token=a%26b%3Dc%2F%23",
+                            Router.format ([], query),
+                            Router.formatPath ([], query)
+                            "users/0/edit",
+                            Router.format ("users", 0, "edit", textQuery),
+                            Router.formatPath ("users", 0, "edit", textQuery)
+                            "users/-1/0/edit",
+                            Router.format ("users", -1, 0, "edit", intQuery),
+                            Router.formatPath ("users", -1, 0, "edit", intQuery)
+                            "users/42/details?q=a%2Fb",
+                            Router.format ("/users/42/details?q=a%2Fb", textQuery),
+                            Router.formatPath ("/users/42/details?q=a%2Fb", textQuery)
+                        ]
+
+                    for expected, hashUrl, pathUrl in cases do
+                        let actual, prefix = if pathMode then pathUrl, "/" else hashUrl, "#/"
+
+                        Expect.equal
+                            actual
+                            (prefix + expected)
+                            "Empty queries must not add separators or change path handling"
+
+                for useElmish in [ false; true ] do
+                    let apiName = if useElmish then "Cmd" else "Router"
+
+                    testCaseAsync (sprintf "%s numeric overloads replace and notify once in %s mode" apiName modeName)
+                    <| async {
+                        let notifications = ResizeArray<string list>()
+                        let prefix = if pathMode then "/" else "#/"
+
+                        do!
+                            withRoot "/#/initial" (fun root ->
+                                async {
+                                    do!
+                                        act (fun () ->
+                                            root.render (
+                                                React.router
+                                                    [
+                                                        if pathMode then router.pathMode else router.hashMode
+                                                        router.onUrlChanged notifications.Add
+                                                    ]
+                                            ))
+
+                                    for expected, navigateHash, navigatePath, commandHash, commandPath in
+                                        navigationOverloadCases HistoryMode.ReplaceState do
+                                        notifications.Clear()
+                                        let originalUrl = window.location.href
+                                        let originalLength = window.history.length
+
+                                        do!
+                                            act (fun () ->
+                                                if useElmish then
+                                                    let command: Elmish.Cmd<unit> =
+                                                        if pathMode then commandPath () else commandHash ()
+
+                                                    Expect.equal
+                                                        window.location.href
+                                                        originalUrl
+                                                        "Constructing a command must not navigate"
+
+                                                    Expect.equal
+                                                        notifications.Count
+                                                        0
+                                                        "Constructing a command must not notify"
+
+                                                    command |> List.iter (fun effect -> effect ignore)
+                                                elif pathMode then
+                                                    navigatePath ()
+                                                else
+                                                    navigateHash ())
+
+                                        let actual =
+                                            if pathMode then
+                                                window.location.pathname + window.location.search
+                                            else
+                                                window.location.hash
+
+                                        Expect.equal
+                                            actual
+                                            (prefix + expected)
+                                            (sprintf "%s should navigate to %s" apiName expected)
+
+                                        Expect.equal
+                                            window.history.length
+                                            originalLength
+                                            "ReplaceState must keep the history length"
+
+                                        Expect.equal
+                                            notifications.Count
+                                            1
+                                            "Each explicit navigation must notify exactly once"
+                                })
+                    }
+
+                    testCaseAsync (
+                        sprintf "%s default and explicit PushState preserve history in %s mode" apiName modeName
+                    )
+                    <| async {
+                        let initialUrl = if pathMode then "/initial" else "/#/initial"
+
+                        let currentUrl () =
+                            if pathMode then
+                                Router.currentPath ()
+                            else
+                                Router.currentUrl ()
+
+                        let runCommand (command: Elmish.Cmd<unit>) =
+                            command |> List.iter (fun effect -> effect ignore)
+
+                        do!
+                            withRoot initialUrl (fun root ->
+                                async {
+                                    do!
+                                        act (fun () ->
+                                            root.render (
+                                                React.router [ if pathMode then router.pathMode else router.hashMode ]
+                                            ))
+
+                                    do!
+                                        act (fun () ->
+                                            match useElmish, pathMode with
+                                            | true, true ->
+                                                runCommand (Cmd.navigatePath ("users", -42, "edit", [ "page", 0 ]))
+                                            | true, false ->
+                                                runCommand (Cmd.navigate ("users", -42, "edit", [ "page", 0 ]))
+                                            | false, true -> Router.navigatePath ("users", -42, "edit", [ "page", 0 ])
+                                            | false, false -> Router.navigate ("users", -42, "edit", [ "page", 0 ]))
+
+                                    Expect.equal
+                                        (currentUrl ())
+                                        [ "users"; "-42"; "edit"; "?page=0" ]
+                                        "Default navigation must format numeric segments"
+
+                                    do!
+                                        act (fun () ->
+                                            match useElmish, pathMode with
+                                            | true, true ->
+                                                runCommand (Cmd.navigatePath ("users", 7, HistoryMode.PushState))
+                                            | true, false ->
+                                                runCommand (Cmd.navigate ("users", 7, HistoryMode.PushState))
+                                            | false, true -> Router.navigatePath ("users", 7, HistoryMode.PushState)
+                                            | false, false -> Router.navigate ("users", 7, HistoryMode.PushState))
+
+                                    Expect.equal
+                                        (currentUrl ())
+                                        [ "users"; "7" ]
+                                        "Explicit PushState must format numeric segments"
+
+                                    do! actOnWindowEvent "popstate" (fun () -> window.history.back ())
+
+                                    Expect.equal
+                                        (currentUrl ())
+                                        [ "users"; "-42"; "edit"; "?page=0" ]
+                                        "Explicit PushState must preserve the preceding entry"
+
+                                    do! actOnWindowEvent "popstate" (fun () -> window.history.back ())
+
+                                    Expect.equal
+                                        (currentUrl ())
+                                        [ "initial" ]
+                                        "Default navigation must preserve the initial entry"
+                                })
+                    }
+
+            testCase "Integer query values use numeric formatting and shared escaping"
+            <| fun _ ->
+                Expect.equal (Router.encodeQueryStringInts []) "" "An empty query has no separator"
+
+                Expect.equal
+                    (Router.encodeQueryStringInts
+                        [
+                            "min value", System.Int32.MinValue
+                            "max&value", System.Int32.MaxValue
+                            "zero", 0
+                        ])
+                    "?min%20value=-2147483648&max%26value=2147483647&zero=0"
+                    "Integer values must be decimal text, with query keys escaped"
 
             testCase "Route.Int works"
             <| fun _ ->
