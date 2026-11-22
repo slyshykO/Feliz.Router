@@ -7,11 +7,11 @@ open Feliz.Router
 open Fable.Mocha
 
 [<Import("act", "react")>]
-let private reactAct (callback: unit -> JS.Promise<unit>) : obj = jsNative
+let private reactAct (_callback: unit -> JS.Promise<unit>) : obj = jsNative
 
 // React returns a thenable; Fable's async adapter needs a native Promise.
 [<Emit("Promise.resolve($0)")>]
-let private resolveAct (thenable: obj) : JS.Promise<unit> = jsNative
+let private resolveAct (_thenable: obj) : JS.Promise<unit> = jsNative
 
 let private actAsync action =
     reactAct action |> resolveAct |> Async.AwaitPromise
