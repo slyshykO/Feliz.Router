@@ -141,38 +141,39 @@ module Router =
     [<Emit("new URLSearchParams($0)")>]
     let createUrlSearchParams (queryString: string) : IUrlSearchParameters = jsNative
 
-    [<Emit("window.navigator.userAgent")>]
-    let navigatorUserAgent : string = jsNative
-
-    let onUrlChange routeMode urlChanged (ev: _) =
+    let private currentLocation routeMode =
         match routeMode with
         | RouteMode.Path -> window.location.pathname + window.location.search
         | _ -> window.location.hash
+
+    let onUrlChange routeMode urlChanged (ev: _) =
+        currentLocation routeMode
         |> fun path -> urlSegments path routeMode
         |> urlChanged
 
     let router: MemoComponent<RouterProps> = React.memo(fun (input: RouterProps) ->
+        let lastLocation = React.useRef(None: (RouteMode * string) option)
         // Keep the one-time subscriptions reading the latest committed props.
         let onChange = React.useEffectEvent(fun (ev: Event) ->
             let urlChanged = Option.defaultValue ignore input.onUrlChanged
             let routeMode = Option.defaultValue RouteMode.Hash input.hashMode
-            onUrlChange routeMode urlChanged ev)
+            let location = routeMode, currentLocation routeMode
+            // Native events can report the same navigation twice. Explicit navigation
+            // and initial notifications still fire even when the route is unchanged.
+            if ev.``type`` = customNavigationEvent || lastLocation.current <> Some location then
+                // Record first: the callback may synchronously navigate somewhere else.
+                lastLocation.current <- Some location
+                onUrlChange routeMode urlChanged ev)
         
         // subscribe to navigation events
         React.useEffectOnce(fun () -> 
-            if navigatorUserAgent.Contains "Trident" || navigatorUserAgent.Contains "MSIE" then
-                window.addEventListener("hashchange", onChange)
-            else 
-                window.addEventListener("popstate", onChange)
-            
+            window.addEventListener("hashchange", onChange)
+            window.addEventListener("popstate", onChange)
             window.addEventListener(customNavigationEvent, onChange)
 
             FsReact.createDisposable(fun () ->
-                if navigatorUserAgent.Contains "Trident" || navigatorUserAgent.Contains "MSIE" then
-                    window.removeEventListener("hashchange", onChange)
-                else 
-                    window.removeEventListener("popstate", onChange)
-
+                window.removeEventListener("hashchange", onChange)
+                window.removeEventListener("popstate", onChange)
                 window.removeEventListener(customNavigationEvent, onChange)
             )
         )

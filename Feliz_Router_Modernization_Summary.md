@@ -44,19 +44,23 @@ The subscription and cleanup effects remain one-time effects; each cleanup remov
 - Adding, removing, and restoring an optional callback after mount.
 - Custom navigation and `popstate`, initial notification, and cleanup after prop changes and unmount.
 
-All six cases reproduced the bug before the hook change; all 19 tests pass afterward. The generated Fable JavaScript imports `useEffectEvent` directly and preserves listener identity during cleanup. The separate `hashchange` and deduplication work below remains pending.
+All six cases reproduced the bug before the hook change, establishing a passing 19-test suite at that step. The generated Fable JavaScript imports `useEffectEvent` directly and preserves listener identity during cleanup. The native-event work below extends that coverage.
 
 ### P0 — Listen to both `hashchange` and `popstate`
 
-**Observed code:** The router chooses `hashchange` only for legacy IE user agents (Trident/MSIE), and `popstate` otherwise. Modern browsers use distinct events:
+**Status: Implemented.** The router now subscribes to both native events and the custom navigation event, with matching cleanup on unmount. The obsolete Trident/MSIE user-agent branch has been removed.
 
 - `hashchange`: fragment (`#...`) navigation, including normal hash links.
 - `popstate`: navigation through browser history entries.
 - `CUSTOM_NAVIGATION_EVENT`: the library's own notification after `Router.navigate(...)` / `Router.navigatePath(...)`.
 
-**Proposed change:** Subscribe to both native events where appropriate; preserve the custom event for `history.pushState` and `history.replaceState`, which do not emit `popstate` automatically. Drop obsolete IE-specific branching if legacy IE is no longer supported by the overall React 19 stack.
+**Notification policy:** Each router remembers its last reported `(routing mode, route URL)` in a React ref. Hash mode compares the fragment; Path mode compares pathname plus query string. Repeated native events for that route are ignored, including a `popstate`/`hashchange` pair. Changes outside the selected route are ignored too, such as fragment-only navigation in Path mode.
 
-Deduplicate notifications for the same effective location where necessary. Ensure both Hash and Path modes work under direct links, Back/Forward, and programmatic navigation. Be especially careful not to drop genuine navigation changes when deduplicating.
+The ref is updated before calling `onUrlChanged`, so callback-triggered navigation remains safe. It stores only the last route: visits such as A → B → A still notify at each step, and router instances have independent tracking.
+
+Explicit `Router.navigate(...)` / `Router.navigatePath(...)` calls retain their custom event and notify even for the current URL, with both PushState and ReplaceState. Initial mount notifications, including Strict Mode effect replay, are preserved.
+
+**Regression coverage:** The suite now has 31 tests. It covers hashchange-only delivery, both native-event orders, duplicate events, query changes, normal hash links, `location.hash`, native Back/Forward, explicit same-URL navigation, redirects from callbacks, and multiple routers. Callback freshness and cleanup now exercise all three listeners. Twelve assertions failed against the previous implementation before this fix.
 
 ### P0 — Add React/DOM integration tests
 
@@ -71,7 +75,7 @@ The existing `tests/Tests.fs` includes useful parsing and URL formatting tests; 
 7. Exercise both Hash and Path modes, React-only usage, and Elmish dispatch.
 8. Test opt-in transitions separately: synchronous React state changes versus delayed/asynchronous Elmish updates.
 
-The callback-freshness work now uses Fable.Mocha with jsdom for mounted-router tests, including routing-mode changes and Strict Mode cleanup. Real-browser history/hash-link checks, deduplication, and the remaining integration cases are follow-up work.
+Mounted-router tests now cover callback freshness, routing-mode changes, native events, deduplication, and Strict Mode cleanup using Fable.Mocha with jsdom. The same suite can run through Fable.Mocha's sequential browser runner. Generated tests live in `tests/bin/fable/` to prevent collisions with demo output. Dedicated Elmish integration tests and future opt-in transition cases remain follow-up work.
 
 ### P1 — Update Feliz and React dependencies
 
@@ -232,4 +236,4 @@ Other metadata cleanup:
 
 ---
 
-**Verification status:** The initial document was a static review. The stale-callback fix is now implemented and validated with `npm test` (19 passing tests), `dotnet build Feliz.Router.sln --configuration Release`, and `npm run build:demo`. A production-demo smoke check also passed initial rendering, Elmish navigation, pushState, popstate, and replaceState. DOM checks use jsdom rather than a real browser. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
+**Verification status:** The first two P0 fixes are implemented. All 31 tests pass under Mocha/jsdom and in headless Chrome 158 using Fable.Mocha's sequential browser runner. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors, and `npm run build:demo` succeeds with the existing webpack bundle-size warnings. A production-demo smoke check covers hash links, Back/Forward, and Elmish pushState/replaceState navigation. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.

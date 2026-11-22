@@ -13,12 +13,37 @@ let private reactAct (callback: unit -> JS.Promise<unit>) : obj = jsNative
 [<Emit("Promise.resolve($0)")>]
 let private resolveAct (thenable: obj) : JS.Promise<unit> = jsNative
 
-let private act action =
-    reactAct (fun () ->
-        action()
-        JS.Constructors.Promise.resolve ())
+let private actAsync action =
+    reactAct action
     |> resolveAct
     |> Async.AwaitPromise
+
+let private act action =
+    actAsync (fun () ->
+        action()
+        JS.Constructors.Promise.resolve ())
+
+// Wait for browser-generated events instead of guessing how long navigation takes.
+let private actOnWindowEvent eventName action =
+    actAsync (fun () ->
+        Async.FromContinuations(fun (success, failure, _) ->
+            let mutable timeout = None
+            let rec onEvent (_: Browser.Types.Event) =
+                cleanup()
+                success()
+            and cleanup () =
+                window.removeEventListener(eventName, onEvent)
+                timeout |> Option.iter window.clearTimeout
+
+            window.addEventListener(eventName, onEvent)
+            timeout <- Some(window.setTimeout((fun () ->
+                cleanup()
+                failure(System.Exception(sprintf "Timed out waiting for %s" eventName))), 1000))
+            try action()
+            with error ->
+                cleanup()
+                failure error)
+        |> Async.StartAsPromise)
 
 let private withRoot initialUrl (run: IReactRoot -> Async<unit>) = async {
     window.history.replaceState(null, "", initialUrl)
@@ -34,10 +59,12 @@ let private withRoot initialUrl (run: IReactRoot -> Async<unit>) = async {
     | Choice2Of2 error -> return raise error
 }
 
-let private dispatchPopstate () =
+let private dispatchWindowEvent eventName =
     let ev = document.createEvent "Event"
-    ev.initEvent("popstate", false, false)
+    ev.initEvent(eventName, false, false)
     window.dispatchEvent ev |> ignore
+
+let private dispatchPopstate () = dispatchWindowEvent "popstate"
 
 type test =
     static member pass() = Expect.isTrue true "It must be true"
@@ -84,16 +111,22 @@ let routerTests =
                             do! act (fun () ->
                                 window.history.replaceState(null, "", url "history")
                                 dispatchPopstate())
+                            do! act (fun () ->
+                                window.history.replaceState(null, "", url "hash-event")
+                                dispatchWindowEvent "hashchange")
                             Expect.equal (List.ofSeq notifications)
-                                [ (version, [ "programmatic" ]); (version, [ "history" ]) ]
-                                "Custom navigation and popstate should each call only the latest callback once"
+                                [ (version, [ "programmatic" ]); (version, [ "history" ]); (version, [ "hash-event" ]) ]
+                                "All three navigation listeners should call only the latest callback once"
                             notifications.Clear()
                     })
 
                     do! act (fun () ->
                         navigate "after-unmount"
-                        dispatchPopstate())
-                    Expect.isEmpty notifications "Unmount should remove both listeners, including after prop changes"
+                        window.history.replaceState(null, "", url "popstate-after-unmount")
+                        dispatchPopstate()
+                        window.history.replaceState(null, "", url "hashchange-after-unmount")
+                        dispatchWindowEvent "hashchange")
+                    Expect.isEmpty notifications "Unmount should remove all three listeners, including after prop changes"
                 }
 
         testCaseAsync "Router uses the latest routing mode in both navigation listeners" <| async {
@@ -141,10 +174,176 @@ let routerTests =
                     Expect.isEmpty notifications "Updating the optional callback should not notify on its own"
                     do! act (fun () -> Router.navigate "next")
                     do! act dispatchPopstate
-                    let expected = if withCallback then [ [ "next" ]; [ "next" ] ] else []
+                    let expected = if withCallback then [ [ "next" ] ] else []
                     Expect.equal (List.ofSeq notifications) expected
-                        "Listeners should use the current callback or ignore events when it is absent"
+                        "Use the current callback, ignore absent callbacks, and suppress the redundant native event"
                     notifications.Clear()
+            })
+        }
+
+        testCaseAsync "Hash router handles hashchange without popstate" <| async {
+            let notifications = ResizeArray<string list>()
+            do! withRoot "/#/initial" (fun root -> async {
+                do! act (fun () -> root.render (React.router [ router.onUrlChanged notifications.Add ]))
+                notifications.Clear()
+                do! act (fun () ->
+                    window.history.replaceState(null, "", "/#/next?query=1")
+                    dispatchWindowEvent "hashchange")
+                Expect.equal (List.ofSeq notifications) [ [ "next"; "?query=1" ] ]
+                    "A hashchange alone must notify the router in modern browsers"
+            })
+        }
+
+        for pathMode in [ false; true ] do
+            let modeName = if pathMode then "Path" else "Hash"
+            let url page = if pathMode then "/" + page else "/#/" + page
+            let navigate (page: string) (mode: HistoryMode) =
+                if pathMode then Router.navigatePath(page, mode)
+                else Router.navigate(page, mode)
+            let render (root: IReactRoot) callback = root.render (React.router [
+                if pathMode then router.pathMode else router.hashMode
+                router.onUrlChanged callback
+            ])
+
+            testCaseAsync (sprintf "%s router deduplicates native events without losing return visits" modeName) <| async {
+                let notifications = ResizeArray<string list>()
+                do! withRoot (url "initial") (fun root -> async {
+                    do! act (fun () -> render root notifications.Add)
+                    notifications.Clear()
+                    for page, events in [
+                        "first", [ "popstate"; "hashchange"; "popstate" ]
+                        "second", [ "hashchange"; "popstate"; "hashchange" ]
+                        "first", [ "popstate"; "hashchange" ]
+                    ] do
+                        do! act (fun () ->
+                            window.history.replaceState(null, "", url page)
+                            events |> List.iter dispatchWindowEvent)
+                    Expect.equal (List.ofSeq notifications) [ [ "first" ]; [ "second" ]; [ "first" ] ]
+                        "Notify each changed route once in either event order, including a return to a previous URL"
+                })
+            }
+
+            testCaseAsync (sprintf "%s router preserves explicit navigation to the current URL" modeName) <| async {
+                let notifications = ResizeArray<string list>()
+                do! withRoot (url "same") (fun root -> async {
+                    do! act (fun () -> render root notifications.Add)
+                    notifications.Clear()
+                    for mode in [ HistoryMode.PushState; HistoryMode.ReplaceState ] do
+                        do! act (fun () -> navigate "same" mode)
+                        Expect.equal (List.ofSeq notifications) [ [ "same" ] ]
+                            "Each explicit navigate call should still notify, including for an unchanged URL"
+                        do! act (fun () ->
+                            dispatchPopstate()
+                            dispatchWindowEvent "hashchange")
+                        Expect.equal (List.ofSeq notifications) [ [ "same" ] ]
+                            "Native events for the route just reported by custom navigation should be ignored"
+                        notifications.Clear()
+                })
+            }
+
+            testCaseAsync (sprintf "%s router handles native Back and Forward once per route" modeName) <| async {
+                let notifications = ResizeArray<string list>()
+                do! withRoot (url "initial") (fun root -> async {
+                    do! act (fun () -> render root notifications.Add)
+                    notifications.Clear()
+                    do! act (fun () ->
+                        navigate "first" HistoryMode.PushState
+                        navigate "second" HistoryMode.PushState)
+                    let eventName = if pathMode then "popstate" else "hashchange"
+                    do! actOnWindowEvent eventName window.history.back
+                    do! actOnWindowEvent eventName window.history.forward
+                    Expect.equal (List.ofSeq notifications)
+                        [ [ "first" ]; [ "second" ]; [ "first" ]; [ "second" ] ]
+                        "Programmatic navigation and browser-generated history events should each report one route"
+                })
+            }
+
+        testCaseAsync "Hash router handles normal hash links and location.hash assignments" <| async {
+            let notifications = ResizeArray<string list>()
+            do! withRoot "/#/initial" (fun root -> async {
+                do! act (fun () -> root.render (React.router [ router.onUrlChanged notifications.Add ]))
+                notifications.Clear()
+                let link = document.createElement "a"
+                link.setAttribute("href", "#/linked")
+                document.body.appendChild link |> ignore
+                try
+                    do! actOnWindowEvent "hashchange" link.click
+                    do! actOnWindowEvent "hashchange" (fun () -> window.location.hash <- "#/assigned?query=1")
+                    Expect.equal (List.ofSeq notifications) [ [ "linked" ]; [ "assigned"; "?query=1" ] ]
+                        "Native fragment navigation should notify once per changed hash"
+                finally
+                    link.remove()
+            })
+        }
+
+        testCaseAsync "Path router ignores fragment-only changes but observes query changes" <| async {
+            let notifications = ResizeArray<string list>()
+            do! withRoot "/page?query=1#first" (fun root -> async {
+                do! act (fun () -> root.render (React.router [
+                    router.pathMode
+                    router.onUrlChanged notifications.Add
+                ]))
+                notifications.Clear()
+                do! actOnWindowEvent "hashchange" (fun () -> window.location.hash <- "#second")
+                Expect.isEmpty notifications "A fragment-only navigation does not change a path route"
+                do! act (fun () ->
+                    window.history.replaceState(null, "", "/page?query=2#second")
+                    dispatchPopstate()
+                    dispatchWindowEvent "hashchange")
+                Expect.equal (List.ofSeq notifications) [ [ "page"; "?query=2" ] ]
+                    "The query string is part of a path route and must not be deduplicated away"
+            })
+        }
+
+        testCaseAsync "Hash router deduplicates by fragment including its query string" <| async {
+            let notifications = ResizeArray<string list>()
+            do! withRoot "/page?outer=1#/route?inner=1" (fun root -> async {
+                do! act (fun () -> root.render (React.router [ router.onUrlChanged notifications.Add ]))
+                notifications.Clear()
+                do! act (fun () ->
+                    window.history.replaceState(null, "", "/other?outer=2#/route?inner=1")
+                    dispatchPopstate())
+                Expect.isEmpty notifications "Path and outer query changes do not change a hash route"
+                do! actOnWindowEvent "hashchange" (fun () -> window.location.hash <- "#/route?inner=2")
+                Expect.equal (List.ofSeq notifications) [ [ "route"; "?inner=2" ] ]
+                    "A query change inside the fragment is a genuine hash route change"
+            })
+        }
+
+        testCaseAsync "Native event deduplication preserves navigation triggered by a callback" <| async {
+            let notifications = ResizeArray<string list>()
+            do! withRoot "/#/initial" (fun root -> async {
+                do! act (fun () -> root.render (React.router [
+                    router.onUrlChanged (fun segments ->
+                        notifications.Add segments
+                        if segments = [ "redirect" ] then Router.navigate "destination")
+                ]))
+                notifications.Clear()
+                do! act (fun () ->
+                    window.history.replaceState(null, "", "/#/redirect")
+                    dispatchPopstate()
+                    dispatchWindowEvent "hashchange")
+                Expect.equal (List.ofSeq notifications) [ [ "redirect" ]; [ "destination" ] ]
+                    "Remember a route before notifying so a callback-triggered navigation is not overwritten"
+            })
+        }
+
+        testCaseAsync "Native event deduplication is local to each mounted router" <| async {
+            let first = ResizeArray<string list>()
+            let second = ResizeArray<string list>()
+            do! withRoot "/#/initial" (fun root -> async {
+                do! act (fun () -> root.render (React.Fragment [
+                    React.router [ router.onUrlChanged first.Add ]
+                    React.router [ router.onUrlChanged second.Add ]
+                ]))
+                first.Clear()
+                second.Clear()
+                do! act (fun () ->
+                    window.history.replaceState(null, "", "/#/next")
+                    dispatchPopstate()
+                    dispatchWindowEvent "hashchange")
+                Expect.equal (List.ofSeq first) [ [ "next" ] ] "The first router should receive the changed route once"
+                Expect.equal (List.ofSeq second) [ [ "next" ] ] "The second router should independently receive it once"
             })
         }
 
@@ -348,4 +547,5 @@ let routerTests =
 
 [<EntryPoint>]
 let main args = 
-    Mocha.runTests routerTests
+    // DOM tests share window.history, including when using Fable.Mocha's browser runner.
+    Mocha.runTests (testSequenced routerTests)

@@ -3,8 +3,8 @@
     "scripts": {
         "build:demo": "dotnet tool restore && dotnet fable demo --run webpack --mode production",
         "start:demo": "dotnet tool restore && dotnet fable watch demo --run webpack serve",
-        "pretest": "dotnet tool restore && dotnet fable tests",
-        "test": "mocha --require ./tests/setup-dom.cjs tests"
+        "pretest": "dotnet tool restore && dotnet fable tests --outDir tests/bin/fable",
+        "test": "mocha --require ./tests/setup-dom.cjs tests/bin/fable/Tests.js"
     },
     "repository": {
         "type": "git",

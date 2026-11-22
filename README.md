@@ -109,6 +109,16 @@ segment "#/home/users?id=1" => [ "home"; "users"; "?id=1" ]
 segment "#/users?id=1&format=json" => [ "users"; "?id=1&format=json" ]
 ```
 
+The router listens to both `hashchange` and `popstate`, so normal hash links,
+`location.hash` changes, and browser Back/Forward navigation are supported.
+Native events notify once per changed route: Hash mode compares the fragment,
+and Path mode compares the pathname plus query string. Fragment-only changes
+therefore do not notify a Path router. Returning to an earlier route still notifies.
+
+Explicit `Router.navigate(...)` and `Router.navigatePath(...)` calls continue to
+notify even for the current URL, including `HistoryMode.ReplaceState`. The initial
+notification on mount is also preserved.
+
 ### Parsing URL segments into `Page` definitions
 
 Instead of using overly complicated parser combinators to parse a simple structure such as URL segments, the `Route` module includes a handful of convenient active patterns to use against these segments:
@@ -362,7 +372,10 @@ Tests use Fable.Mocha 2.17 with Mocha 12.0.3. Fable.Mocha's embedded npm metadat
 still declares Mocha 8; this fork validates the newer runner with its test suite.
 Check the F# binding and JavaScript runtime together when upgrading either.
 Mounted-router tests use jsdom and React `act` to cover callback and routing-mode
-updates, initial notifications, and listener cleanup, including Strict Mode.
+updates, hash links, Back/Forward, native-event deduplication, and listener cleanup,
+including Strict Mode. Tests run sequentially because they share browser history.
+Fable compiles them into `tests/bin/fable/` so demo builds cannot overwrite their
+generated router or introduce a second copy of the Fable runtime into the tests.
 
 Use `dotnet build Feliz.Router.sln --configuration Release` to compile all projects,
 `dotnet build build/Build.fsproj --configuration Release` to check release tooling,
