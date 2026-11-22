@@ -8,7 +8,7 @@
         </PackageIconUrl>
         <PackageTags>fsharp;fable;react;html;router;routing</PackageTags>
         <Authors>Zaid Ajaj;Oleksii Slyshyk</Authors>
-        <Version>4.100.0</Version>
+        <Version>4.101.0</Version>
         <TargetFramework>netstandard2.1</TargetFramework>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReleaseNotes>Update dependencies to Feliz 3.4, Fable.Core 5.6, and FSharp.Core 10 on .NET 10 LTS. Uses Fable 5 and React 19.3.</PackageReleaseNotes>
