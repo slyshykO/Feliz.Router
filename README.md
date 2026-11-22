@@ -323,6 +323,104 @@ let render state dispatch =
         router.children currentPage
     ]
 ```
+### Opt-in route transitions
+
+Add `router.useTransitions true` to run `onUrlChanged` inside
+[`React.startTransition`](https://react.dev/reference/react/startTransition):
+
+```fsharp
+[<ReactComponent>]
+let App () =
+    let currentUrl, setCurrentUrl = React.useState (Router.currentUrl ())
+    let currentPage =
+        match currentUrl with
+        | [ "about" ] -> Html.h1 "About"
+        | _ -> Html.h1 "Home"
+
+    React.router [
+        router.useTransitions true
+        router.onUrlChanged setCurrentUrl
+        router.children currentPage
+    ]
+```
+
+The option defaults to `false`. URL/history changes and callback invocation remain
+synchronous; React can defer the resulting render and keep an already revealed
+Suspense page visible while the next page loads. The option also applies to the
+initial notification and native navigation events. Existing deduplication and
+listener cleanup remain unchanged. Use `router.pathMode` and `Router.currentPath()`
+for the equivalent path-based application.
+
+Only React updates scheduled inside the callback inherit its transition. Updates
+after an `await`, timer, or queued dispatch need `React.startTransition` around
+their actual state update. Keep controlled-input updates urgent. This option does
+not move synchronous callback work to another thread or expose an `isPending` flag;
+use `React.useTransition` in the application when you need pending UI.
+
+#### Elmish rendering
+
+`Cmd.navigate` may run while Elmish is already processing a message. In that case,
+the router callback queues `UrlChanged`, and Elmish renders it after the callback's
+transition has ended. Wrapping dispatch alone cannot cover that render.
+
+The example's [TransitionHelpers.withRouteTransitions](demo/TransitionHelpers.fs)
+starts a transition at the actual render boundary when the route changes:
+
+```fsharp
+Program.mkProgram init update view
+|> Program.withReactSynchronous "root"
+|> TransitionHelpers.withRouteTransitions
+    (fun model -> model.UseTransitions)
+    (fun model -> model.CurrentUrl)
+|> Program.run
+```
+
+This helper is application/example code, not a new Feliz.Router API. Copy or adapt
+it for your model. Apply it **after** `withReactSynchronous`; it preserves urgent
+renders for unrelated model changes. `withReactBatched` defers rendering through
+`requestAnimationFrame`, so wrapping that adapter's scheduling call is insufficient.
+The [Elmish example](demo/Transitions.fs) uses the actual Fable.Elmish.React renderer.
+
+### ViewTransition animations
+
+With React/ReactDOM **19.3+**, wrap the page content in `React.ViewTransition`:
+
+```fsharp
+React.router [
+    router.useTransitions true
+    router.onUrlChanged setCurrentUrl
+    router.children (
+        React.ViewTransition [
+            viewTransition.update "route-page"
+            viewTransition.children [ currentPage ]
+        ])
+]
+```
+
+`ViewTransition` animates eligible React updates; an ordinary urgent state update
+does not activate it. The router does not add an animation boundary or CSS itself.
+The application controls styling and reduced motion, as shown in
+[public/transitions.css](public/transitions.css). React manages transition names
+and the browser API; do not call `document.startViewTransition` around these updates.
+Browsers without that API continue to navigate without animation.
+
+**Back/Forward limitation:** React intentionally skips View Transition animations
+for legacy `popstate` updates to preserve browser scroll/form restoration. Back and
+Forward still navigate correctly. Native hash links can follow this same path.
+Animating those navigations requires separate Navigation API integration; this
+change does not alter scroll restoration or add directional transition types.
+See [React's router guidance](https://react.dev/reference/react/ViewTransition#building-view-transition-enabled-routers).
+
+Run `npm run start:demo`, then open:
+
+- [React state example](http://localhost:8080/?example=transitions#/home)
+- [Elmish example](http://localhost:8080/?example=transitions-elmish#/home)
+
+Both examples include an opt-out checkbox, push/replace navigation, native links,
+Back/Forward, and a local text field outside the animated page. Reduced-motion
+preferences disable animated durations. `npm run test:demo` builds and checks both
+examples in Chrome with real animations, reduced motion, and the browser API disabled.
+
 ### Migrating from 2.x to 3.x
 
 The 3.x release refactored the API to be more in line with how Feliz libraries are built as well as using latest features from React like functional components to implement the router itself. This release also made it easy to work with the router from a React-only applications and not just from Elmish based apps.
@@ -364,6 +462,9 @@ npm test
 # run the same suite in an installed Chrome browser
 npm run test:browser
 
+# build and verify both ViewTransition demos in Chrome
+npm run test:demo
+
 # run the demo application in watch mode
 npm run start:demo
 
@@ -382,6 +483,10 @@ and their Path variants, with assertions on page content, history entries, and
 dispatched URL changes. Tests run sequentially because they share browser history.
 Fable compiles them into `tests/bin/fable/` so demo builds cannot overwrite their
 generated router or introduce a second copy of the Fable runtime into the tests.
+`tests/TransitionApp.fs` adds controlled Suspense fixtures for transition opt-in,
+urgent interactions, callback/option changes, and Elmish dispatch/render timing.
+The demo browser runner additionally exercises the actual Fable.Elmish.React renderer
+and browser View Transition API. Its screenshots are saved in `tests/bin/demo-browser/`.
 
 `npm run test:browser` uses Playwright Core and an installed Chrome; it does not
 download a browser. Set `BROWSER_CHANNEL=msedge` to use installed Edge, or set

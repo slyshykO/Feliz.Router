@@ -6,7 +6,9 @@
         "pretest": "dotnet tool restore && dotnet fable tests --outDir tests/bin/fable",
         "test": "mocha --require ./tests/setup-dom.cjs tests/bin/fable/Tests.js",
         "pretest:browser": "npm run pretest",
-        "test:browser": "node tests/run-browser.cjs"
+        "test:browser": "node tests/run-browser.cjs",
+        "pretest:demo": "npm run build:demo",
+        "test:demo": "node tests/run-demo-browser.cjs"
     },
     "repository": {
         "type": "git",

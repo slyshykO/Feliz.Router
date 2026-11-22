@@ -78,7 +78,7 @@ Coverage includes:
 
 Run `npm test` for Mocha/jsdom or `npm run test:browser` for the same F# suite in an installed Chrome browser. The checked-in Playwright Core runner also supports Edge through `BROWSER_CHANNEL=msedge` and custom Chromium executables through `BROWSER_EXECUTABLE_PATH`. It discovers the test count, waits for sequential completion, reports failures and browser errors, and closes the browser and local server.
 
-Generated files remain isolated in `tests/bin/fable/` and `tests/bin/browser/`. Both runners execute the same suite, subsequently expanded to 52 tests by the numeric-overload work below. Transition-specific coverage is tracked with the P1 transition feature below.
+Generated files remain isolated in `tests/bin/fable/` and `tests/bin/browser/`. Both runners execute the same suite, subsequently expanded to 52 tests by the numeric-overload work and 79 by the transition work below.
 
 ### P1 — Update Feliz and React dependencies
 
@@ -92,32 +92,35 @@ The dependency declarations and committed lockfiles now agree:
 | React | `^19.3.1` in `package.json` | 19.3.1 |
 | ReactDOM | `^19.3.1` in `package.json` | 19.3.1 |
 
-Both `paket.lock` and `package-lock.json` were updated. The upgraded dependencies have passed the Release solution build, production demo build, and the current 52-test suite under Mocha/jsdom and headless Chrome. The router's `useEffectEvent` runtime requirement is documented in the README.
+Both `paket.lock` and `package-lock.json` were updated. The upgraded dependencies passed the Release solution build, production demo build, and the 52-test suite under Mocha/jsdom and headless Chrome before the transition work below. The router's `useEffectEvent` runtime requirement is documented in the README.
 
 ### P1 — Offer opt-in React transitions for route updates
 
-**Opportunity:** `React.startTransition` is exposed in Feliz 3.4.0. Consider an opt-in property such as:
+**Status: completed.** `router.useTransitions true` wraps `onUrlChanged` in `React.startTransition`. The option defaults to `false` and is read from the latest committed props:
 
 ```fsharp
 React.router [
-    router.useTransitions true // proposed API, not implemented
+    router.useTransitions true
     router.onUrlChanged updateUrl
     router.children currentPage
 ]
 ```
 
-The intent is to mark React route-state updates as non-urgent, helping keep interactions responsive when changing to a rendering-heavy page. This also provides a basis for `React.ViewTransition` animations.
+URL/history changes and callback invocation remain synchronous. React can defer rendering and retain an already revealed Suspense page while its replacement loads. Initial, programmatic, and native notifications use the same option; deduplication and cleanup are preserved.
 
-**Important caveats:** `startTransition` only marks React updates made synchronously inside its callback. Wrapping an Elmish `dispatch` does not necessarily mark a state update that happens later, and state updates after `let!` / `await` need their own transition handling. The API should remain optional and must be verified with both plain Feliz and Fable.Elmish.React. It is not a Web Worker and does not remove synchronous computation costs.
+**Elmish integration:** `Cmd.navigate` can queue `UrlChanged` until the router's transition has ended. The application-level `demo/TransitionHelpers.fs` helper wraps the actual render when the route changes. Apply it after `Program.withReactSynchronous`; `withReactBatched` schedules a later animation-frame callback and does not preserve this scope. The demo uses the actual Fable.Elmish.React renderer. State updates after `let!` / `await` likewise need a transition around their actual React update. Synchronous callback work is not moved to another thread.
+
+**Regression coverage:** `tests/TransitionApp.fs` supplies controlled Suspense fixtures. Twenty-seven added cases cover default/disabled/enabled behavior in Hash/Path modes with and without Strict Mode, urgent interactions during suspension, resolved navigation and Back/Forward, immediate callbacks/URL updates, option and callback freshness, superseded navigation, listener cleanup, and the queued Elmish dispatch limitation. Both React state and real Elmish programs exercise the supported scheduling paths.
 
 ### P1 — Document integration with React `ViewTransition`
 
-Prefer **documentation/examples rather than an always-on router animation layer**. The application should own animation styling; the router should only expose or enable navigation semantics when useful.
+**Status: completed.** The README documents composition and runtime requirements, with runnable React-state and Elmish examples in `demo/Transitions.fs`. Open `/?example=transitions#/home` or `/?example=transitions-elmish#/home` on the demo server. The application owns the animation boundary and styling in `public/transitions.css`; the router adds no automatic animation layer.
 
-Example composition (illustrative):
+Example composition (React/ReactDOM 19.3+):
 
 ```fsharp
 React.router [
+    router.useTransitions true
     router.onUrlChanged updateUrl
     router.children [
         React.ViewTransition [
@@ -130,7 +133,9 @@ React.router [
 
 The state update causing the page change must participate in a supported React Transition, deferred update, or Suspense reveal; wrapping pages in `ViewTransition` alone does not animate ordinary updates.
 
-Consider directional types (`forward`, `backward`) using `React.addTransitionType` only if they can be attached to the **same transition as the actual React state update**. Browser Back/Forward and scrolling/restoration require extra consideration; modern Navigation API integration may be a separate later effort. Browsers without View Transitions should continue to navigate normally.
+`npm run test:demo` builds the production demo and verifies both examples with the real browser View Transition API. It checks actual animated durations for push/replace, disabled transitions, reduced motion, absence of the browser API, native links, Back/Forward, history entries, and preserved local input state. Screenshots are written to ignored `tests/bin/demo-browser/`.
+
+**Browser limitation:** React intentionally skips animations from legacy `popstate` events to preserve scroll/form restoration. Back/Forward and native hash links still navigate correctly; the Chromium tests verify that these paths do not animate. Navigation API integration and directional transition types remain separate future work. Browsers without View Transitions navigate normally, and reduced-motion CSS disables animated durations.
 
 ### P2 — Add an optional route-reading hook
 
@@ -201,8 +206,8 @@ Other metadata cleanup:
 | 1 | Handle `hashchange`, `popstate`, and custom navigation consistently — **completed** | P0 |
 | 1 | Add mounted-router tests and Strict Mode coverage — **completed** | P0 |
 | 2 | Upgrade Feliz/React, regenerate lockfiles, verify builds — **completed** | P1 |
-| 2 | Add **opt-in** transition behavior; test both React and Elmish | P1 |
-| 2 | Publish a `ViewTransition` integration example | P1 |
+| 2 | Add **opt-in** transition behavior; test both React and Elmish — **completed** | P1 |
+| 2 | Document a `ViewTransition` integration example — **completed** | P1 |
 | 3 | Explore additive `Router.useLocation()` / `useRoute()` | P2 |
 | 3 | Add examples for Activity, Suspense, ErrorBoundary | P2 |
 | 3 | Fix numeric-to-string `unbox` and reduce internal duplication — **completed** | P2/P3 |
@@ -228,4 +233,4 @@ Other metadata cleanup:
 
 ---
 
-**Verification status:** The dependency-update P1, all three P0 items, and the unsafe-cast/overload P2/P3 item are implemented. `npm test` and `npm run test:browser` (Chrome 158) each pass all 52 tests with no skipped cases or browser errors. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. `npm run build:demo` and a production-demo smoke check of numeric query navigation, push/replace, Back, and native hash links pass; webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
+**Verification status:** All listed P0/P1 items and the unsafe-cast/overload P2/P3 item are implemented. `npm test` and `npm run test:browser` (Chrome 158) each pass all 79 tests with no skipped cases or browser errors. The production demo build and `tests/run-demo-browser.cjs` pass all six React/Elmish scenarios (normal animations, reduced motion, browser API unavailable); screenshots of both examples were reviewed. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. Fantomas 8.1.3 checks pass for all 12 repository F# source files. Webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.

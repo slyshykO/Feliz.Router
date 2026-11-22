@@ -1561,6 +1561,237 @@ let routerTests =
                     [ "hello"; "friend" ], [ ("foo", "bar") ], "#/hello/friend?foo=bar"
                 ]
                 |> List.iter (fun (sgs, qry, res) -> Expect.equal (Router.format (sgs, qry)) res "They are equal"))
+            for useElmish in [ false; true ] do
+                for pathMode in [ false; true ] do
+                    for strictMode in [ false; true ] do
+                        for enabled in [ None; Some false; Some true ] do
+                            let name =
+                                sprintf
+                                    "%s %s transitions=%A strict=%b"
+                                    (if useElmish then "Elmish" else "React")
+                                    (if pathMode then "Path" else "Hash")
+                                    enabled
+                                    strictMode
+
+                            testCaseAsync (name + " schedules the actual route render")
+                            <| async {
+                                let controls = TransitionApp.createControls ()
+                                let initialUrl = if pathMode then "/home" else "/#/home"
+
+                                try
+                                    do!
+                                        withContainer initialUrl (fun container root ->
+                                            async {
+                                                do!
+                                                    act (fun () ->
+                                                        if useElmish then
+                                                            TransitionApp.startElmish
+                                                                root
+                                                                pathMode
+                                                                strictMode
+                                                                enabled
+                                                                true
+                                                                controls
+                                                        else
+                                                            TransitionApp.mountReact
+                                                                root
+                                                                pathMode
+                                                                strictMode
+                                                                enabled
+                                                                controls)
+
+                                                Expect.equal
+                                                    (elementByTestId container "transition-page").textContent
+                                                    "Home"
+                                                    "The initial page should render"
+
+                                                controls.Notifications.Clear()
+
+                                                do!
+                                                    act (fun () ->
+                                                        controls.Navigate "slow" HistoryMode.PushState
+
+                                                        Expect.equal
+                                                            controls.Notifications.Count
+                                                            1
+                                                            "The callback must still run synchronously"
+
+                                                        let url =
+                                                            if pathMode then
+                                                                Router.currentPath ()
+                                                            else
+                                                                Router.currentUrl ()
+
+                                                        Expect.equal
+                                                            url
+                                                            [ "slow" ]
+                                                            "The URL must update immediately, even while rendering suspends")
+
+                                                let fallback =
+                                                    container.querySelector "[data-testid='transition-fallback']"
+
+                                                if enabled = Some true then
+                                                    Expect.isNull
+                                                        fallback
+                                                        "A transition should retain the already visible page"
+
+                                                    Expect.equal
+                                                        (elementByTestId container "transition-page").textContent
+                                                        "Home"
+                                                        "The old page stays until the new page is ready"
+                                                else
+                                                    Expect.isNotNull
+                                                        fallback
+                                                        "Default/disabled routing should retain ordinary urgent Suspense behavior"
+
+                                                do! act (fun () -> (elementByTestId container "urgent-count").click())
+
+                                                Expect.equal
+                                                    (elementByTestId container "urgent-count").textContent
+                                                    "1"
+                                                    "Urgent interactions must work while the route is suspended"
+
+                                                do! act controls.Complete
+
+                                                Expect.equal
+                                                    (elementByTestId container "transition-page").textContent
+                                                    "Slow page"
+                                                    "Resolving data must commit the new page"
+
+                                                Expect.equal
+                                                    controls.Notifications.Count
+                                                    1
+                                                    "Rendering must not repeat the navigation callback"
+
+                                                do! actOnWindowEvent "popstate" window.history.back
+
+                                                Expect.equal
+                                                    (elementByTestId container "transition-page").textContent
+                                                    "Home"
+                                                    "Back should render the previous route"
+
+                                                do! actOnWindowEvent "popstate" window.history.forward
+
+                                                Expect.equal
+                                                    (elementByTestId container "transition-page").textContent
+                                                    "Slow page"
+                                                    "Forward should render the resolved route"
+
+                                                Expect.equal
+                                                    controls.Notifications.Count
+                                                    3
+                                                    "Native history notifications should remain deduplicated"
+
+                                                // Return before the pushed entry so subsequent cases can replace
+                                                // the forward stack instead of hitting browser history limits.
+                                                do! actOnWindowEvent "popstate" window.history.back
+                                            })
+
+                                    let count = controls.Notifications.Count
+
+                                    do!
+                                        act (fun () ->
+                                            if pathMode then
+                                                Router.navigatePath ("after-unmount", HistoryMode.ReplaceState)
+                                            else
+                                                Router.navigate ("after-unmount", HistoryMode.ReplaceState))
+
+                                    Expect.equal
+                                        controls.Notifications.Count
+                                        count
+                                        "Transition routing must clean up its subscriptions"
+                                finally
+                                    controls.Stop()
+                            }
+
+            for pathMode in [ false; true ] do
+                testCaseAsync (sprintf "Transition settings and callbacks stay fresh (path=%b)" pathMode)
+                <| async {
+                    let controls = TransitionApp.createControls ()
+                    let initialUrl = if pathMode then "/home" else "/#/home"
+
+                    do!
+                        withContainer initialUrl (fun container root ->
+                            async {
+                                do! act (fun () -> TransitionApp.mountReact root pathMode true None controls)
+                                controls.Notifications.Clear()
+
+                                for enabled in [ Some true; Some false; None; Some true ] do
+                                    let label = sprintf "callback-%A" enabled
+                                    let count = controls.Notifications.Count
+
+                                    do!
+                                        act (fun () ->
+                                            controls.Configure enabled
+                                            controls.RenameCallback label)
+
+                                    Expect.equal
+                                        controls.Notifications.Count
+                                        count
+                                        "Changing props must not trigger navigation"
+
+                                    do! act (fun () -> controls.Navigate "slow" HistoryMode.ReplaceState)
+
+                                    Expect.equal
+                                        controls.Notifications.[count]
+                                        (label, [ "slow" ])
+                                        "The latest committed callback must run"
+
+                                    let fallback = container.querySelector "[data-testid='transition-fallback']"
+
+                                    Expect.equal
+                                        (isNull fallback)
+                                        (enabled = Some true)
+                                        "The latest transition setting must determine scheduling"
+
+                                    do! act (fun () -> controls.Navigate "home" HistoryMode.ReplaceState)
+
+                                    Expect.equal
+                                        (elementByTestId container "transition-page").textContent
+                                        "Home"
+                                        "A newer navigation must supersede the suspended route"
+
+                                do! act controls.Complete
+
+                                Expect.equal
+                                    (elementByTestId container "transition-page").textContent
+                                    "Home"
+                                    "A superseded route must not reappear when its data resolves"
+                            })
+                }
+
+            testCaseAsync "Queued Elmish navigation needs a transition at the render boundary"
+            <| async {
+                let controls = TransitionApp.createControls ()
+
+                try
+                    do!
+                        withContainer "/#/home" (fun container root ->
+                            async {
+                                do!
+                                    act (fun () ->
+                                        TransitionApp.startElmish root false false (Some true) false controls)
+                                // Idle dispatch runs immediately, so the router's transition is sufficient.
+                                do! act (fun () -> Router.navigate ("slow", HistoryMode.ReplaceState))
+
+                                Expect.isNull
+                                    (container.querySelector "[data-testid='transition-fallback']")
+                                    "Idle Elmish dispatch should inherit the router transition"
+
+                                do! act (fun () -> Router.navigate ("home", HistoryMode.ReplaceState))
+                                // Cmd.navigate runs while Elmish is processing another message; UrlChanged is queued.
+                                do! act (fun () -> controls.Navigate "slow" HistoryMode.ReplaceState)
+
+                                Expect.isNotNull
+                                    (container.querySelector "[data-testid='transition-fallback']")
+                                    "Queued dispatch does not inherit the completed callback's transition"
+
+                                do! act controls.Complete
+                            })
+                finally
+                    controls.Stop()
+            }
+
         ]
 
 [<EntryPoint>]

@@ -48,6 +48,7 @@ module Router =
         abstract onUrlChanged: (string list -> unit) option
         abstract application: ReactElement option
         abstract hashMode: RouteMode option
+        abstract useTransitions: bool option
 
     [<Emit("encodeURIComponent($0)")>]
     let encodeURIComponent (value: string) : string = jsNative
@@ -176,7 +177,11 @@ module Router =
                     if ev.``type`` = customNavigationEvent || lastLocation.current <> Some location then
                         // Record first: the callback may synchronously navigate somewhere else.
                         lastLocation.current <- Some location
-                        onUrlChange routeMode urlChanged ev)
+
+                        if Option.defaultValue false input.useTransitions then
+                            React.startTransition (fun () -> onUrlChange routeMode urlChanged ev)
+                        else
+                            onUrlChange routeMode urlChanged ev)
 
             // subscribe to navigation events
             React.useEffectOnce (fun () ->
@@ -233,6 +238,11 @@ type router =
     /// `segment "#/users?id=1&format=json" => [ "users"; "?id=1&format=json" ]`
     static member inline onUrlChanged(eventHandler: string list -> unit) : IRouterProperty =
         unbox ("onUrlChanged", eventHandler)
+
+    /// Runs onUrlChanged inside React.startTransition. Disabled by default.
+    /// The callback and browser history updates remain synchronous; React may defer rendering.
+    /// Updates scheduled later (including queued Elmish messages) need a transition at their actual React update.
+    static member inline useTransitions(enabled: bool) : IRouterProperty = unbox ("useTransitions", enabled)
 
     /// The element that is rendered inside where the `router` is placed. Usually this contains the root application but it could also be part of another root element.
     ///
