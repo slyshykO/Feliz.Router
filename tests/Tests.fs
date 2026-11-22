@@ -1792,6 +1792,314 @@ let routerTests =
                     controls.Stop()
             }
 
+            for mode in [ RouteMode.Hash; RouteMode.Path ] do
+                let url route =
+                    if mode = RouteMode.Path then "/" + route else "/#/" + route
+
+                let navigate (route: string) (history: HistoryMode) =
+                    if mode = RouteMode.Path then
+                        Router.navigatePath (route, history)
+                    else
+                        Router.navigate (route, history)
+
+                for strictMode in [ false; true ] do
+                    testCaseAsync (sprintf "useRoute follows standalone navigation (%A, strict=%b)" mode strictMode)
+                    <| withContainer (url "users/Jane%20Doe?q=a%26b") (fun container root ->
+                        async {
+                            let observer = RouteHookApp.observe ()
+                            let reader = RouteHookApp.Reader (Some mode) 0 "route" observer
+
+                            do!
+                                act (fun () ->
+                                    root.render (if strictMode then React.StrictMode [ reader ] else reader))
+
+                            Expect.equal
+                                observer.Route
+                                [ "users"; "Jane Doe"; "?q=a%26b" ]
+                                "Read the deep link on first render"
+
+                            Expect.equal
+                                (elementByTestId container "route").textContent
+                                "users | Jane Doe | ?q=a%26b"
+                                "Render the parsed route"
+
+                            do! act (fun () -> navigate "pushed" HistoryMode.PushState)
+
+                            Expect.equal
+                                observer.Route
+                                [ "pushed" ]
+                                "PushState must update the hook without React.router"
+
+                            do! act (fun () -> navigate "replaced" HistoryMode.ReplaceState)
+                            Expect.equal observer.Route [ "replaced" ] "ReplaceState must update the hook"
+                            do! actOnWindowEvent "popstate" window.history.back
+
+                            Expect.equal
+                                observer.Route
+                                [ "users"; "Jane Doe"; "?q=a%26b" ]
+                                "Back restores the deep link"
+
+                            do! actOnWindowEvent "popstate" window.history.forward
+                            Expect.equal observer.Route [ "replaced" ] "Forward restores the replaced entry"
+                            do! actOnWindowEvent "popstate" window.history.back
+                        })
+
+                testCaseAsync (sprintf "useRoute observes only its selected URL and query (%A)" mode)
+                <| withRoot "/path?q=1#/hash?q=1" (fun root ->
+                    async {
+                        let observer = RouteHookApp.observe ()
+                        do! act (fun () -> root.render (RouteHookApp.Reader (Some mode) 0 "route" observer))
+                        let renders = observer.Renders
+
+                        let unrelated =
+                            if mode = RouteMode.Path then
+                                "/path?q=1#/other"
+                            else
+                                "/other?q=2#/hash?q=1"
+
+                        do!
+                            act (fun () ->
+                                window.history.replaceState (null, "", unrelated)
+                                dispatchWindowEvent "hashchange"
+                                dispatchPopstate ())
+
+                        Expect.equal observer.Renders renders "Changes outside the selected URL must not render"
+
+                        let changed =
+                            if mode = RouteMode.Path then
+                                "/path?q=2#/other"
+                            else
+                                "/other?q=2#/hash?q=2"
+
+                        do! act (fun () -> window.history.replaceState (null, "", changed))
+                        Expect.equal observer.Renders renders "Raw history writes emit no navigation event"
+
+                        do!
+                            act (fun () ->
+                                dispatchWindowEvent (if mode = RouteMode.Path then "popstate" else "hashchange"))
+
+                        Expect.equal
+                            observer.Route
+                            [ (if mode = RouteMode.Path then "path" else "hash"); "?q=2" ]
+                            "A single native event must deliver query changes"
+
+                        let updatedRenders = observer.Renders
+
+                        do!
+                            act (fun () ->
+                                dispatchWindowEvent "hashchange"
+                                dispatchPopstate ()
+                                dispatchWindowEvent "CUSTOM_NAVIGATION_EVENT")
+
+                        Expect.equal
+                            observer.Renders
+                            updatedRenders
+                            "Duplicate events must not render an unchanged snapshot"
+                    })
+
+                testCaseAsync (sprintf "useRoute catches navigation before subscription (%A)" mode)
+                <| withRoot (url "home") (fun root ->
+                    async {
+                        let observer = RouteHookApp.observe ()
+                        do! act (fun () -> root.render (RouteHookApp.NavigateBeforeSubscription mode observer))
+
+                        Expect.equal
+                            observer.Route
+                            [ "mounted" ]
+                            "Recheck the snapshot after subscribing to avoid missing layout-effect navigation"
+                    })
+
+                testCaseAsync (sprintf "useRoute remains synchronous inside startTransition (%A)" mode)
+                <| withContainer (url "home") (fun container root ->
+                    async {
+                        let controls = TransitionApp.createControls ()
+
+                        do!
+                            act (fun () ->
+                                root.render (
+                                    React.Suspense(
+                                        [ RouteHookApp.SuspendedReader mode controls.Pending ],
+                                        fallback = Html.p [ prop.testId "hook-fallback"; prop.text "Loading" ]
+                                    )
+                                ))
+
+                        Expect.equal
+                            (elementByTestId container "hook-page").textContent
+                            "Home"
+                            "The initial page is visible"
+
+                        do! act (fun () -> React.startTransition (fun () -> navigate "slow" HistoryMode.ReplaceState))
+
+                        Expect.isNotNull
+                            (container.querySelector "[data-testid='hook-fallback']")
+                            "External-store updates do not retain the old Suspense page as a transition"
+
+                        do! act controls.Complete
+
+                        Expect.equal
+                            (elementByTestId container "hook-page").textContent
+                            "Slow page"
+                            "Resolved data renders the selected route"
+                    })
+
+            for strictMode in [ false; true ] do
+                testCaseAsync (sprintf "useRoute keeps stable subscriptions and cleans up (strict=%b)" strictMode)
+                <| async {
+                    let monitor = RouteHookApp.monitorListeners ()
+
+                    try
+                        do!
+                            withRoot "/path#/hash" (fun root ->
+                                async {
+                                    let observer = RouteHookApp.observe ()
+
+                                    let render mode revision =
+                                        let reader = RouteHookApp.Reader (Some mode) revision "route" observer
+                                        root.render (if strictMode then React.StrictMode [ reader ] else reader)
+
+                                    do! act (fun () -> render RouteMode.Hash 0)
+
+                                    Expect.equal
+                                        monitor.Active
+                                        3
+                                        "Each mounted reader owns three listeners, including after Strict Mode replay"
+
+                                    let added, removed = monitor.Added, monitor.Removed
+                                    let originalRoute, commits = observer.Route, observer.Commits
+                                    do! act (fun () -> render RouteMode.Hash 1)
+
+                                    Expect.isTrue
+                                        (obj.ReferenceEquals(observer.Route, originalRoute))
+                                        "Parent rerenders must reuse the parsed list"
+
+                                    Expect.equal
+                                        observer.Commits
+                                        commits
+                                        "Unchanged route dependencies must not rerun effects"
+
+                                    for mode, expected in [ RouteMode.Path, "path"; RouteMode.Hash, "hash" ] do
+                                        do! act (fun () -> render mode 1)
+
+                                        Expect.equal
+                                            observer.Route
+                                            [ expected ]
+                                            "Changing mode reads its current location immediately"
+
+                                    Expect.equal
+                                        (monitor.Added, monitor.Removed)
+                                        (added, removed)
+                                        "Rerenders and mode changes must not resubscribe"
+                                })
+
+                        Expect.equal monitor.Active 0 "Unmount must remove every listener"
+
+                        Expect.equal
+                            monitor.Removed
+                            monitor.Added
+                            "Cleanup must balance mount and Strict Mode subscriptions"
+                    finally
+                        monitor.Restore()
+                }
+
+            testCaseAsync "useRoute defaults to Hash and coexists with callback routing"
+            <| withContainer "/path#/home" (fun container root ->
+                async {
+                    let observer = RouteHookApp.observe ()
+                    let notifications = ResizeArray<string list>()
+
+                    do!
+                        act (fun () ->
+                            root.render (
+                                React.router
+                                    [
+                                        router.onUrlChanged notifications.Add
+                                        router.children
+                                            [
+                                                RouteHookApp.Reader None 0 "route" observer
+                                                Html.a
+                                                    [
+                                                        prop.testId "hook-link"
+                                                        prop.href "#/linked"
+                                                        prop.text "Link"
+                                                    ]
+                                            ]
+                                    ]
+                            ))
+
+                    Expect.equal observer.Route [ "home" ] "Omitting the mode selects Hash"
+                    let renders, count = observer.Renders, notifications.Count
+                    do! act (fun () -> Router.navigate ("home", HistoryMode.ReplaceState))
+                    Expect.equal observer.Renders renders "Explicit same-URL navigation must not rerender the hook"
+
+                    Expect.equal
+                        notifications.Count
+                        (count + 1)
+                        "Callback routing must retain explicit same-URL notifications"
+
+                    do! actOnWindowEvent "hashchange" (fun () -> (elementByTestId container "hook-link").click())
+                    Expect.equal observer.Route [ "linked" ] "Native hash links update the hook"
+                    do! actOnWindowEvent "hashchange" (fun () -> window.location.hash <- "#/assigned")
+                    Expect.equal observer.Route [ "assigned" ] "Direct hash assignment updates the hook"
+                    do! actOnWindowEvent "popstate" window.history.back
+                    do! actOnWindowEvent "popstate" window.history.back
+                })
+
+            testCaseAsync "useRoute consumers subscribe and unmount independently"
+            <| async {
+                let monitor = RouteHookApp.monitorListeners ()
+
+                try
+                    do!
+                        withRoot "/path#/hash" (fun root ->
+                            async {
+                                let hash, path = RouteHookApp.observe (), RouteHookApp.observe ()
+
+                                let render includeHash =
+                                    root.render (
+                                        Html.div
+                                            [
+                                                if includeHash then
+                                                    Html.div
+                                                        [
+                                                            prop.key "hash"
+                                                            prop.children
+                                                                [
+                                                                    RouteHookApp.Reader
+                                                                        (Some RouteMode.Hash)
+                                                                        0
+                                                                        "hash"
+                                                                        hash
+                                                                ]
+                                                        ]
+                                                Html.div
+                                                    [
+                                                        prop.key "path"
+                                                        prop.children
+                                                            [ RouteHookApp.Reader (Some RouteMode.Path) 0 "path" path ]
+                                                    ]
+                                            ]
+                                    )
+
+                                do! act (fun () -> render true)
+
+                                Expect.equal
+                                    (hash.Route, path.Route)
+                                    ([ "hash" ], [ "path" ])
+                                    "Readers select their own routing mode"
+
+                                Expect.equal monitor.Active 6 "Both readers must subscribe"
+                                do! act (fun () -> render false)
+                                Expect.equal monitor.Active 3 "Removing one reader must leave the other subscribed"
+                                let renders = hash.Renders
+                                do! act (fun () -> Router.navigatePath ("remaining", HistoryMode.ReplaceState))
+                                Expect.equal path.Route [ "remaining" ] "The remaining reader must continue to update"
+                                Expect.equal hash.Renders renders "The removed reader must stay unmounted"
+                            })
+
+                    Expect.equal monitor.Active 0 "All subscriptions must be removed after the final unmount"
+                finally
+                    monitor.Restore()
+            }
         ]
 
 [<EntryPoint>]

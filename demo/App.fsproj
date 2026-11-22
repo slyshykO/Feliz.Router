@@ -8,6 +8,7 @@
     <Compile Include="AppPath.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Transitions.fs" />
+    <Compile Include="RouteHook.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>

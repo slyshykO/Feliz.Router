@@ -11,6 +11,7 @@ let example =
     |> Seq.tryPick (fun entry -> if entry.[0] = "example" then Some entry.[1] else None)
 
 match example with
+| Some "hook" -> ReactDOM.createRoot(document.getElementById "root").render(RouteHook.App())
 | Some "transitions" -> ReactDOM.createRoot(document.getElementById "root").render(Transitions.ReactExample())
 | Some "transitions-elmish" -> Transitions.startElmish "root"
 | Some "path" ->

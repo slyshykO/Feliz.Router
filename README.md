@@ -119,6 +119,53 @@ Explicit `Router.navigate(...)` and `Router.navigatePath(...)` calls continue to
 notify even for the current URL, including `HistoryMode.ReplaceState`. The initial
 notification on mount is also preserved.
 
+### Optional route-reading hook
+
+`Router.useRoute()` returns the current parsed `string list` and subscribes to URL
+changes. Use it in a React function component or custom hook, called
+unconditionally. It works independently of `React.router`:
+
+```fsharp
+[<ReactComponent>]
+let App () =
+    let route = Router.useRoute()
+    Html.div [
+        Html.button [
+            prop.text "Open user 42"
+            prop.onClick (fun _ -> Router.navigate("users", 42))
+        ]
+        match route with
+        | [] | [ "home" ] -> Html.h1 "Home"
+        | [ "users"; Route.Int id ] -> Html.h1 (sprintf "User %d" id)
+        | _ -> Html.h1 "Not found"
+    ]
+```
+
+Hash mode is the default, with the same parsing as `Router.currentUrl()`. For
+pathname plus query string, use `Router.useRoute(RouteMode.Path)` and navigate
+with `Router.navigatePath(...)`; its segments match `Router.currentPath()`.
+Existing `Route` active patterns and encoded query handling apply to both modes.
+The mode can change between renders.
+
+The hook listens to `hashchange`, `popstate`, and the router's custom navigation
+event. It uses a stable URL string snapshot and memoizes the parsed list. Events
+for an unchanged selected URL—including explicit same-URL navigation—do not
+request another render. `router.onUrlChanged` retains its separate same-URL
+notification behavior. Each hook cleans up its listeners when unmounted.
+Raw `history.pushState` / `replaceState` calls emit no event; use the Router
+navigation functions to notify mounted readers.
+
+This hook is **client-only**: it reads the browser location and does not supply a
+server snapshot for SSR/hydration. Its external-store updates are synchronous,
+even when navigation is wrapped in `React.startTransition`. For deferred page
+updates, retaining a visible Suspense page, or `ViewTransition` animations, keep
+React route state with `router.onUrlChanged` and the transition integration below.
+See React's [`useSyncExternalStore` caveats](https://react.dev/reference/react/useSyncExternalStore#caveats).
+
+Run `npm run start:demo` and open the
+[standalone hook example](http://localhost:8080/?example=hook#/home), implemented
+in [demo/RouteHook.fs](demo/RouteHook.fs).
+
 ### Parsing URL segments into `Page` definitions
 
 Instead of using overly complicated parser combinators to parse a simple structure such as URL segments, the `Route` module includes a handful of convenient active patterns to use against these segments:
@@ -439,6 +486,37 @@ Starting from Feliz.Router v4, it will only work with Fable compiler v4+ and Fel
 
 If you are using Fable compiler v3, then you should use Feliz.Router v3.10 (latest) which still relies on Feliz v1.68 for Fable v3 compatibility.
 
+### Running examples
+
+Complete the [development setup](#development), then run this command from the
+repository root:
+
+```bash
+npm run start:demo
+```
+
+On Windows PowerShell, use `npm.cmd run start:demo` if execution policy blocks
+`npm.ps1`. Keep the terminal running and wait for compilation to finish, then
+open an example:
+
+| Example | URL |
+| --- | --- |
+| Original Elmish hash routing | [localhost:8080/#/](http://localhost:8080/#/) |
+| Standalone `Router.useRoute()` hook | [localhost:8080/?example=hook#/home](http://localhost:8080/?example=hook#/home) |
+| React state with ViewTransition | [localhost:8080/?example=transitions#/home](http://localhost:8080/?example=transitions#/home) |
+| Elmish with ViewTransition | [localhost:8080/?example=transitions-elmish#/home](http://localhost:8080/?example=transitions-elmish#/home) |
+
+All examples share the same server. The `?example=...` query parameter selects
+the application in [demo/Main.fs](demo/Main.fs); the `#/...` fragment selects a
+page within that application. Open another example link to switch applications.
+The server watches source changes; stop it with **Ctrl+C**.
+
+**Path example limitation:** The older Path example is selected by
+[`?example=path`](http://localhost:8080/?example=path), but its route parser also
+receives this query parameter and currently renders **Not Found**. Its example
+selection needs fixing before it can be launched normally. This is a demo issue;
+the library's Path routing is covered by the integration tests.
+
 ### Development
 
 The `update-deps` branch of this fork uses Feliz 3.4, React/ReactDOM 19.3,
@@ -462,7 +540,7 @@ npm test
 # run the same suite in an installed Chrome browser
 npm run test:browser
 
-# build and verify both ViewTransition demos in Chrome
+# build and verify the hook and ViewTransition demos in Chrome
 npm run test:demo
 
 # run the demo application in watch mode

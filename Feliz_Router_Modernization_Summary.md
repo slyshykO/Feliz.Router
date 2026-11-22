@@ -78,7 +78,7 @@ Coverage includes:
 
 Run `npm test` for Mocha/jsdom or `npm run test:browser` for the same F# suite in an installed Chrome browser. The checked-in Playwright Core runner also supports Edge through `BROWSER_CHANNEL=msedge` and custom Chromium executables through `BROWSER_EXECUTABLE_PATH`. It discovers the test count, waits for sequential completion, reports failures and browser errors, and closes the browser and local server.
 
-Generated files remain isolated in `tests/bin/fable/` and `tests/bin/browser/`. Both runners execute the same suite, subsequently expanded to 52 tests by the numeric-overload work and 79 by the transition work below.
+Generated files remain isolated in `tests/bin/fable/` and `tests/bin/browser/`. Both runners execute the same suite, subsequently expanded to 52 tests by the numeric-overload work, 79 by the transition work, and 93 by the route-reading hook below.
 
 ### P1 — Update Feliz and React dependencies
 
@@ -139,18 +139,23 @@ The state update causing the page change must participate in a supported React T
 
 ### P2 — Add an optional route-reading hook
 
-For plain React/Feliz apps, a `Router.useLocation()` or `Router.useRoute()` convenience hook could replace manual `useState` + `router.onUrlChanged` wiring:
+**Status: completed.** `Router.useRoute(?mode: RouteMode)` returns parsed route segments and subscribes to browser navigation without requiring `React.router` or manual `useState` / `onUrlChanged` wiring:
 
 ```fsharp
 [<ReactComponent>]
 let App () =
-    let location = Router.useLocation() // proposed API
-    // match location with ...
+    let route = Router.useRoute() // Hash by default; use RouteMode.Path for paths
+    match route with
+    | [] | [ "home" ] -> Html.h1 "Home"
+    | [ "users"; Route.Int id ] -> Html.h1 (sprintf "User %d" id)
+    | _ -> Html.h1 "Not found"
 ```
 
-**Candidate implementation:** `React.useSyncExternalStore`, which was already exposed before Feliz 3.4.0. Browser URL/history is an external source of state, making this a natural conceptual fit.
+**Implementation:** `React.useSyncExternalStore` observes a primitive URL string: the fragment in Hash mode, or pathname plus query in Path mode. Stable snapshot/subscription functions avoid subscription churn; parsed lists are memoized by URL and mode. Each consumer subscribes to `hashchange`, `popstate`, and `CUSTOM_NAVIGATION_EVENT`, with independent cleanup. Changing mode reads the new location immediately. React rechecks the snapshot after subscribing, covering navigation between render and subscription.
 
-**Caveats:** `getSnapshot` must return a stable value when the URL has not changed; do not allocate a new `string list` every time. Prefer a primitive URL string or a cached parsed result. Also, `useSyncExternalStore` updates are synchronous and cannot simply replace the transition-aware React route state if the goal is animated navigation. Keep this hook additive, not a mandatory replacement for `onUrlChanged`.
+**Semantics:** Same-URL events do not request a hook render; existing callback routing still receives explicit same-URL navigation notifications. Raw history writes emit no event, so use the Router navigation functions. The hook is client-only and supplies no SSR snapshot. External-store updates remain synchronous even inside `startTransition`; keep callback-based React state for deferred rendering, Suspense page retention, and ViewTransition integration.
+
+**Documentation and coverage:** The README covers Hash/Path usage and limitations. `demo/RouteHook.fs`, available at `/?example=hook#/home`, demonstrates standalone navigation. Fourteen cases in `tests/Tests.fs` with fixtures in `tests/RouteHookApp.fs` cover deep links, queries, PushState/ReplaceState, native links/hash assignment, Back/Forward, selected-URL filtering, duplicate events, callback coexistence, mode changes, memoized segments, subscription identity/cleanup under Strict Mode, multiple consumers, the subscription race, and synchronous Suspense behavior. The production browser smoke test also verifies navigation and reloads in the hook demo.
 
 ### P2 — Provide examples for `React.Activity`, Suspense, and ErrorBoundary
 
@@ -208,7 +213,7 @@ Other metadata cleanup:
 | 2 | Upgrade Feliz/React, regenerate lockfiles, verify builds — **completed** | P1 |
 | 2 | Add **opt-in** transition behavior; test both React and Elmish — **completed** | P1 |
 | 2 | Document a `ViewTransition` integration example — **completed** | P1 |
-| 3 | Explore additive `Router.useLocation()` / `useRoute()` | P2 |
+| 3 | Add optional `Router.useRoute()` — **completed** | P2 |
 | 3 | Add examples for Activity, Suspense, ErrorBoundary | P2 |
 | 3 | Fix numeric-to-string `unbox` and reduce internal duplication — **completed** | P2/P3 |
 | 3 | Correct npm/NuGet metadata; review `remotedev` and CI | P2 |
@@ -233,4 +238,4 @@ Other metadata cleanup:
 
 ---
 
-**Verification status:** All listed P0/P1 items and the unsafe-cast/overload P2/P3 item are implemented. `npm test` and `npm run test:browser` (Chrome 158) each pass all 79 tests with no skipped cases or browser errors. The production demo build and `tests/run-demo-browser.cjs` pass all six React/Elmish scenarios (normal animations, reduced motion, browser API unavailable); screenshots of both examples were reviewed. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. Fantomas 8.1.3 checks pass for all 12 repository F# source files. Webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
+**Verification status:** All listed P0/P1 items, the optional route-reading hook, and the unsafe-cast/overload P2/P3 item are implemented. `npm test` and `npm run test:browser` (Chrome 158) each pass all 93 tests with no skipped cases or browser errors. `npm run test:demo` builds the production demo and passes seven scenarios: six React/Elmish transition scenarios (normal animations, reduced motion, browser API unavailable) and standalone hook navigation. The hook screenshot was reviewed alongside the previously reviewed transition examples. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. Fantomas 8.1.3 checks pass for all 14 repository F# source files. Webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.

@@ -87,6 +87,41 @@ async function checkExample(browser, origin, example, mode) {
     }
 }
 
+async function checkRouteHook(browser, origin) {
+    const context = await browser.newContext();
+    try {
+        const page = await context.newPage();
+        const errors = [];
+        page.on("pageerror", error => errors.push(error.message));
+        page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+        await page.route("https://maxcdn.bootstrapcdn.com/**", route => route.fulfill({ contentType: "text/css", body: "" }));
+        await page.goto(`${origin}/?example=hook#/home`);
+        const expectPage = title => page.waitForFunction(expected => document.querySelector('[data-testid="hook-page"]')?.textContent === expected, title);
+        await expectPage("Home");
+        const historyLength = await page.evaluate(() => history.length);
+        await page.getByRole("button", { name: "Open user 42", exact: true }).click();
+        await expectPage("User 42");
+        assert.equal(await page.evaluate(() => history.length), historyLength + 1);
+        await fs.mkdir(path.join(__dirname, "bin", "demo-browser"), { recursive: true });
+        await page.screenshot({ path: path.join(__dirname, "bin", "demo-browser", "hook.png"), fullPage: true });
+        await page.getByRole("button", { name: "Replace with About", exact: true }).click();
+        await expectPage("About");
+        assert.equal(await page.evaluate(() => history.length), historyLength + 1);
+        await page.reload();
+        await expectPage("About");
+        await page.getByRole("button", { name: "Back", exact: true }).click();
+        await expectPage("Home");
+        await page.getByRole("button", { name: "Forward", exact: true }).click();
+        await expectPage("About");
+        await page.getByRole("link", { name: "Home link", exact: true }).click();
+        await expectPage("Home");
+        assert.deepEqual(errors, []);
+        console.log("hook: standalone navigation passed");
+    } finally {
+        await context.close();
+    }
+}
+
 async function main() {
     const assets = new Map(await Promise.all([
         ["/", "index.html", "text/html"],
@@ -112,6 +147,7 @@ async function main() {
         for (const example of ["transitions", "transitions-elmish"]) {
             for (const mode of ["normal", "reduced", "unsupported"]) await checkExample(browser, origin, example, mode);
         }
+        await checkRouteHook(browser, origin);
     } finally {
         try { if (browser) await browser.close(); }
         finally {

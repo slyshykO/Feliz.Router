@@ -158,6 +158,28 @@ module Router =
         | RouteMode.Path -> window.location.pathname + window.location.search
         | _ -> window.location.hash
 
+    // Keep these functions stable across renders. React compares the primitive URL
+    // snapshot before requesting a render, including after a subscription is installed.
+    let private hashSnapshot () = currentLocation RouteMode.Hash
+    let private pathSnapshot () = currentLocation RouteMode.Path
+
+    let locationSnapshot routeMode =
+        if routeMode = RouteMode.Path then
+            pathSnapshot
+        else
+            hashSnapshot
+
+    let subscribeToLocation (notify: unit -> unit) =
+        let onChange (_: Event) = notify ()
+        window.addEventListener ("hashchange", onChange)
+        window.addEventListener ("popstate", onChange)
+        window.addEventListener (customNavigationEvent, onChange)
+
+        fun () ->
+            window.removeEventListener ("hashchange", onChange)
+            window.removeEventListener ("popstate", onChange)
+            window.removeEventListener (customNavigationEvent, onChange)
+
     let onUrlChange routeMode urlChanged (ev: _) =
         currentLocation routeMode
         |> fun path -> urlSegments path routeMode
@@ -273,6 +295,17 @@ type Router =
     static member inline currentPath() =
         let fullPath = window.location.pathname + window.location.search
         Router.urlSegments fullPath RouteMode.Path
+
+    /// Subscribes to the browser URL and returns parsed route segments. Defaults to Hash mode.
+    /// Call unconditionally from a React function component or custom hook; React.router is not required.
+    /// Client-only. External-store updates are synchronous, so use onUrlChanged with React state for transitions.
+    static member inline useRoute(?mode: RouteMode) : string list =
+        let mode = Option.defaultValue RouteMode.Hash mode
+
+        let location =
+            React.useSyncExternalStore (Router.subscribeToLocation, Router.locationSnapshot mode)
+
+        React.useMemo ((fun () -> Router.urlSegments location mode), [| box location; box mode |])
 
     static member inline format([<ParamArray>] xs: string array) =
         Router.encodeParts (List.ofArray xs) RouteMode.Hash
