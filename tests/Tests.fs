@@ -45,12 +45,12 @@ let private actOnWindowEvent eventName action =
                 failure error)
         |> Async.StartAsPromise)
 
-let private withRoot initialUrl (run: IReactRoot -> Async<unit>) = async {
+let private withContainer initialUrl (run: Browser.Types.HTMLElement -> IReactRoot -> Async<unit>) = async {
     window.history.replaceState(null, "", initialUrl)
     let container = document.createElement "div"
     document.body.appendChild container |> ignore
     let root = ReactDOM.createRoot container
-    let! result = Async.Catch(run root)
+    let! result = Async.Catch(run container root)
     do! act root.unmount
     container.remove()
     window.history.replaceState(null, "", "/")
@@ -58,6 +58,14 @@ let private withRoot initialUrl (run: IReactRoot -> Async<unit>) = async {
     | Choice1Of2 () -> ()
     | Choice2Of2 error -> return raise error
 }
+
+let private withRoot initialUrl run =
+    withContainer initialUrl (fun _ root -> run root)
+
+let private elementByTestId (container: Browser.Types.HTMLElement) testId =
+    let element = container.querySelector(sprintf "[data-testid='%s']" testId)
+    Expect.isNotNull element (sprintf "The application should render '%s'" testId)
+    unbox<Browser.Types.HTMLElement> element
 
 let private dispatchWindowEvent eventName =
     let ev = document.createEvent "Event"
@@ -79,6 +87,77 @@ let itCompiles() = Router.navigate "users"
 
 let routerTests =
     testList "Router tests" [
+        for useElmish in [ false; true ] do
+            for pathMode in [ false; true ] do
+                for strictMode in [ false; true ] do
+                    let appName = if useElmish then "Elmish" else "React state"
+                    let modeName = if pathMode then "Path" else "Hash"
+                    let strictName = if strictMode then " with Strict Mode" else ""
+                    testCaseAsync (sprintf "%s renders navigation in %s mode%s" appName modeName strictName) <| async {
+                        let notifications = ResizeArray<string list>()
+                        let mutable stop = ignore
+                        let initialRoute = "search?q=Jane%20Doe"
+                        let initialUrl = if pathMode then "/" + initialRoute else "/#/" + initialRoute
+                        try
+                            do! withContainer initialUrl (fun container root -> async {
+                                do! act (fun () ->
+                                    if useElmish then
+                                        stop <- IntegrationApp.startElmish root pathMode strictMode notifications
+                                    else
+                                        IntegrationApp.mountReact root pathMode strictMode notifications)
+
+                                let expectPage title count =
+                                    Expect.equal (elementByTestId container "page").textContent title
+                                        "The rendered page should follow the current URL"
+                                    Expect.equal notifications.Count count
+                                        "Navigation should update application state exactly once per route change"
+                                let click testId = (elementByTestId container testId).click()
+                                let mountCount = if strictMode then 2 else 1
+                                let initialHistoryLength = window.history.length
+                                expectPage "Search: Jane Doe" mountCount
+                                Expect.equal notifications.[0] [ "search"; "?q=Jane%20Doe" ]
+                                    "The initial notification should preserve the query for the route parser"
+
+                                do! act (fun () -> click "push-user")
+                                expectPage "User 7" (mountCount + 1)
+                                Expect.equal window.history.length (initialHistoryLength + 1)
+                                    "PushState should add a history entry"
+
+                                do! act (fun () -> click "replace-home")
+                                expectPage "Home" (mountCount + 2)
+                                Expect.equal window.history.length (initialHistoryLength + 1)
+                                    "ReplaceState should replace the current entry without adding one"
+
+                                let historyEvent = if pathMode then "popstate" else "hashchange"
+                                do! actOnWindowEvent historyEvent window.history.back
+                                expectPage "Search: Jane Doe" (mountCount + 3)
+                                do! actOnWindowEvent historyEvent window.history.forward
+                                expectPage "Home" (mountCount + 4)
+
+                                do! actOnWindowEvent "hashchange" (fun () -> click "native-link")
+                                if pathMode then expectPage "Home" (mountCount + 4)
+                                else expectPage "User 8" (mountCount + 5)
+
+                                do! act (fun () ->
+                                    dispatchWindowEvent "popstate"
+                                    dispatchWindowEvent "hashchange")
+                                let finalCount = mountCount + (if pathMode then 4 else 5)
+                                Expect.equal notifications.Count finalCount
+                                    "Duplicate native events must not dispatch another application update"
+                            })
+
+                            // Keep the Elmish program alive until after this check so a leaked
+                            // listener cannot be hidden by terminating its dispatch loop early.
+                            let countBeforeUnmountedNavigation = notifications.Count
+                            do! act (fun () ->
+                                if pathMode then Router.navigatePath "after-unmount"
+                                else Router.navigate "after-unmount")
+                            Expect.equal notifications.Count countBeforeUnmountedNavigation
+                                "The application should stop receiving navigation after its root unmounts"
+                        finally
+                            stop()
+                    }
+
         for pathMode in [ false; true ] do
             for strictMode in [ false; true ] do
                 let modeName = if pathMode then "Path" else "Hash"

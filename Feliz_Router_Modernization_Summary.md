@@ -60,22 +60,25 @@ The ref is updated before calling `onUrlChanged`, so callback-triggered navigati
 
 Explicit `Router.navigate(...)` / `Router.navigatePath(...)` calls retain their custom event and notify even for the current URL, with both PushState and ReplaceState. Initial mount notifications, including Strict Mode effect replay, are preserved.
 
-**Regression coverage:** The suite now has 31 tests. It covers hashchange-only delivery, both native-event orders, duplicate events, query changes, normal hash links, `location.hash`, native Back/Forward, explicit same-URL navigation, redirects from callbacks, and multiple routers. Callback freshness and cleanup now exercise all three listeners. Twelve assertions failed against the previous implementation before this fix.
+**Regression coverage:** This step expanded the suite to 31 tests. It covers hashchange-only delivery, both native-event orders, duplicate events, query changes, normal hash links, `location.hash`, native Back/Forward, explicit same-URL navigation, redirects from callbacks, and multiple routers. Callback freshness and cleanup exercise all three listeners. Twelve assertions failed against the previous implementation before this fix.
 
 ### P0 — Add React/DOM integration tests
 
-The existing `tests/Tests.fs` includes useful parsing and URL formatting tests; expand coverage to the mounted router behavior. Recommended cases:
+**Status: Implemented.** `tests/Tests.fs` now contains 39 tests: 13 parsing/formatting tests and 26 mounted-router/application cases. `tests/IntegrationApp.fs` supplies a React `useState` application and a real Elmish program with a test-owned React root, dispatch queue, update function, and navigation commands.
 
-1. Re-render with a new `onUrlChanged` callback and verify that the next navigation uses it.
-2. Re-render with changed routing mode; verify correct URL interpretation and subscriptions.
-3. Navigate through a normal `href="#/..."` link and check `hashchange` handling.
-4. Test `popstate`, Back/Forward, `pushState`, `replaceState`, and the custom navigation event.
-5. Confirm no duplicate callback for one effective location change (when deduplication is implemented).
-6. Verify event-listener cleanup on unmount and under React Strict Mode.
-7. Exercise both Hash and Path modes, React-only usage, and Elmish dispatch.
-8. Test opt-in transitions separately: synchronous React state changes versus delayed/asynchronous Elmish updates.
+Coverage includes:
 
-Mounted-router tests now cover callback freshness, routing-mode changes, native events, deduplication, and Strict Mode cleanup using Fable.Mocha with jsdom. The same suite can run through Fable.Mocha's sequential browser runner. Generated tests live in `tests/bin/fable/` to prevent collisions with demo output. Dedicated Elmish integration tests and future opt-in transition cases remain follow-up work.
+- Callback replacement and routing-mode changes after re-render.
+- Hash links, `location.hash`, native history events, and notification deduplication.
+- Initial deep links with encoded query values and actual rendered page updates.
+- Button-driven PushState/ReplaceState through `Router.navigate`/`Router.navigatePath` and Elmish `Cmd.navigate`/`Cmd.navigatePath`, with history-length assertions.
+- Back/Forward restoring the expected page after replacement navigation.
+- Both application styles in Hash and Path modes, with and without Strict Mode.
+- Listener cleanup after unmount; Elmish remains active during the cleanup assertion, then its dispatch loop is terminated.
+
+Run `npm test` for Mocha/jsdom or `npm run test:browser` for the same F# suite in an installed Chrome browser. The checked-in Playwright Core runner also supports Edge through `BROWSER_CHANNEL=msedge` and custom Chromium executables through `BROWSER_EXECUTABLE_PATH`. It discovers the test count, waits for sequential completion, reports failures and browser errors, and closes the browser and local server.
+
+Generated files remain isolated in `tests/bin/fable/` and `tests/bin/browser/`. All 39 cases pass in both runners. Transition-specific coverage is tracked with the P1 transition feature below.
 
 ### P1 — Update Feliz and React dependencies
 
@@ -89,7 +92,7 @@ The dependency declarations and committed lockfiles now agree:
 | React | `^19.3.1` in `package.json` | 19.3.1 |
 | ReactDOM | `^19.3.1` in `package.json` | 19.3.1 |
 
-Both `paket.lock` and `package-lock.json` were updated. The upgraded dependencies have passed the Release solution build, production demo build, and the current 31-test suite under Mocha/jsdom and headless Chrome. The router's `useEffectEvent` runtime requirement is documented in the README.
+Both `paket.lock` and `package-lock.json` were updated. The upgraded dependencies have passed the Release solution build, production demo build, and the current 39-test suite under Mocha/jsdom and headless Chrome. The router's `useEffectEvent` runtime requirement is documented in the README.
 
 ### P1 — Offer opt-in React transitions for route updates
 
@@ -192,9 +195,9 @@ Other metadata cleanup:
 
 | Phase | Deliverable | Priority |
 | --- | --- | --- |
-| 1 | Correct stale callbacks and subscription lifecycle | P0 |
-| 1 | Handle `hashchange`, `popstate`, and custom navigation consistently | P0 |
-| 1 | Add mounted-router tests and Strict Mode coverage | P0 |
+| 1 | Correct stale callbacks and subscription lifecycle — **completed** | P0 |
+| 1 | Handle `hashchange`, `popstate`, and custom navigation consistently — **completed** | P0 |
+| 1 | Add mounted-router tests and Strict Mode coverage — **completed** | P0 |
 | 2 | Upgrade Feliz/React, regenerate lockfiles, verify builds — **completed** | P1 |
 | 2 | Add **opt-in** transition behavior; test both React and Elmish | P1 |
 | 2 | Publish a `ViewTransition` integration example | P1 |
@@ -223,4 +226,4 @@ Other metadata cleanup:
 
 ---
 
-**Verification status:** The dependency-update P1 and the first two P0 fixes are implemented. All 31 tests pass under Mocha/jsdom and in headless Chrome 158 using Fable.Mocha's sequential browser runner. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors, and `npm run build:demo` succeeds with the existing webpack bundle-size warnings. A production-demo smoke check covers hash links, Back/Forward, and Elmish pushState/replaceState navigation. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
+**Verification status:** The dependency-update P1 and all three P0 items are implemented. `npm test` and `npm run test:browser` (Chrome 158) each pass all 39 tests with no skipped cases or browser errors. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors. The production demo build and navigation smoke check passed during the preceding routing fix; webpack's existing bundle-size warnings remain. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.

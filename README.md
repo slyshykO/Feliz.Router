@@ -358,8 +358,11 @@ Fable, Paket, and FAKE. On Windows PowerShell, use `npm.cmd` if execution policy
 dotnet tool restore
 dotnet paket restore
 npm ci
-# run tests
+# run tests with jsdom
 npm test
+
+# run the same suite in an installed Chrome browser
+npm run test:browser
 
 # run the demo application in watch mode
 npm run start:demo
@@ -371,11 +374,21 @@ npm run build:demo
 Tests use Fable.Mocha 2.17 with Mocha 12.0.3. Fable.Mocha's embedded npm metadata
 still declares Mocha 8; this fork validates the newer runner with its test suite.
 Check the F# binding and JavaScript runtime together when upgrading either.
-Mounted-router tests use jsdom and React `act` to cover callback and routing-mode
-updates, hash links, Back/Forward, native-event deduplication, and listener cleanup,
-including Strict Mode. Tests run sequentially because they share browser history.
+Mounted-router tests use React `act` to cover callback and routing-mode updates,
+hash links, Back/Forward, native-event deduplication, and listener cleanup,
+including Strict Mode. `tests/IntegrationApp.fs` adds rendered React state and
+Elmish program fixtures: button clicks exercise `Router.navigate`/`Cmd.navigate`
+and their Path variants, with assertions on page content, history entries, and
+dispatched URL changes. Tests run sequentially because they share browser history.
 Fable compiles them into `tests/bin/fable/` so demo builds cannot overwrite their
 generated router or introduce a second copy of the Fable runtime into the tests.
+
+`npm run test:browser` uses Playwright Core and an installed Chrome; it does not
+download a browser. Set `BROWSER_CHANNEL=msedge` to use installed Edge, or set
+`BROWSER_EXECUTABLE_PATH` to a Chromium-compatible executable. The command bundles
+the same F# suite into `tests/bin/browser/`, serves it on a temporary local port,
+and fails on test failures or browser runtime/console errors. Fable.Mocha's browser
+runner waits one second before each test, so this run is slower than `npm test`.
 
 Use `dotnet build Feliz.Router.sln --configuration Release` to compile all projects,
 `dotnet build build/Build.fsproj --configuration Release` to check release tooling,

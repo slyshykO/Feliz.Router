@@ -4,6 +4,7 @@
     </PropertyGroup>
     <ItemGroup>
         <Compile Include="..\src\Router.fs" />
+        <Compile Include="IntegrationApp.fs" />
         <Compile Include="Tests.fs" />
     </ItemGroup>
     <ItemGroup>
