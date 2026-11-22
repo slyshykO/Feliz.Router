@@ -79,30 +79,17 @@ Mounted-router tests now cover callback freshness, routing-mode changes, native 
 
 ### P1 — Update Feliz and React dependencies
 
-Align the library/demo with the new APIs:
+**Status: Implemented** in commit `65b6972` (`Update dependencies and build tooling for .NET 10 LTS`).
 
-`paket.dependencies`:
+The dependency declarations and committed lockfiles now agree:
 
-```text
-nuget Feliz >= 3.4.0
-```
+| Dependency | Declared constraint | Locked version |
+| --- | --- | --- |
+| Feliz | `~> 3.4` in `paket.dependencies` | 3.4.0 |
+| React | `^19.3.1` in `package.json` | 19.3.1 |
+| ReactDOM | `^19.3.1` in `package.json` | 19.3.1 |
 
-Then re-resolve and commit `paket.lock` so the build actually uses the new version.
-
-`package.json`:
-
-```json
-{
-  "dependencies": {
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
-  }
-}
-```
-
-Update the npm lockfile and run a build/test pass. React 19.3 is needed for `ViewTransition`, `addTransitionType`, Fragment refs, and the associated new features. If React 19.2 consumers must remain supported, avoid using 19.3-only APIs unconditionally in router core, or clearly declare the raised runtime requirement as a compatibility change.
-
-Review package-release notes and compatibility requirements before publishing a new version.
+Both `paket.lock` and `package-lock.json` were updated. The upgraded dependencies have passed the Release solution build, production demo build, and the current 31-test suite under Mocha/jsdom and headless Chrome. The router's `useEffectEvent` runtime requirement is documented in the README.
 
 ### P1 — Offer opt-in React transitions for route updates
 
@@ -208,7 +195,7 @@ Other metadata cleanup:
 | 1 | Correct stale callbacks and subscription lifecycle | P0 |
 | 1 | Handle `hashchange`, `popstate`, and custom navigation consistently | P0 |
 | 1 | Add mounted-router tests and Strict Mode coverage | P0 |
-| 2 | Upgrade Feliz/React, regenerate lockfiles, verify builds | P1 |
+| 2 | Upgrade Feliz/React, regenerate lockfiles, verify builds — **completed** | P1 |
 | 2 | Add **opt-in** transition behavior; test both React and Elmish | P1 |
 | 2 | Publish a `ViewTransition` integration example | P1 |
 | 3 | Explore additive `Router.useLocation()` / `useRoute()` | P2 |
@@ -236,4 +223,4 @@ Other metadata cleanup:
 
 ---
 
-**Verification status:** The first two P0 fixes are implemented. All 31 tests pass under Mocha/jsdom and in headless Chrome 158 using Fable.Mocha's sequential browser runner. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors, and `npm run build:demo` succeeds with the existing webpack bundle-size warnings. A production-demo smoke check covers hash links, Back/Forward, and Elmish pushState/replaceState navigation. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
+**Verification status:** The dependency-update P1 and the first two P0 fixes are implemented. All 31 tests pass under Mocha/jsdom and in headless Chrome 158 using Fable.Mocha's sequential browser runner. `dotnet build Feliz.Router.sln --configuration Release` passes with zero warnings/errors, and `npm run build:demo` succeeds with the existing webpack bundle-size warnings. A production-demo smoke check covers hash links, Back/Forward, and Elmish pushState/replaceState navigation. Remaining snippets marked as proposed/illustrative are API designs or sketches, not validated patches.
