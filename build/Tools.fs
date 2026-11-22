@@ -6,7 +6,7 @@ open System.IO
 open Fake.Core
 
 module CreateProcess =
-    /// Creates a cross platfrom command from the given program and arguments.
+    /// Creates a cross platform command from the given program and arguments.
     ///
     /// For example:
     ///
@@ -26,24 +26,27 @@ module CreateProcess =
     /// ```
     let xplatCommand program args =
         let program', args' =
-            if Environment.isWindows
-            then "cmd", List.concat [ [ "/C"; program ]; args ]
-            else program, args
+            if Environment.isWindows then
+                "cmd", List.concat [ [ "/C"; program ]; args ]
+            else
+                program, args
 
         CreateProcess.fromRawCommand program' args'
- 
+
 let executablePath (tool: string) =
     let locator =
-        if Environment.isWindows
-        then "C:\\Windows\\System32\\where.exe"
-        else "/usr/bin/which"
+        if Environment.isWindows then
+            "C:\\Windows\\System32\\where.exe"
+        else
+            "/usr/bin/which"
 
     let locatorOutput =
         CreateProcess.xplatCommand locator [ tool ]
         |> CreateProcess.redirectOutput
         |> Proc.run
 
-    if locatorOutput.ExitCode <> 0 then failwithf "Could not determine the executable path of '%s'" tool
+    if locatorOutput.ExitCode <> 0 then
+        failwithf "Could not determine the executable path of '%s'" tool
 
     locatorOutput.Result.Output
     |> String.splitStr Environment.NewLine
@@ -51,7 +54,7 @@ let executablePath (tool: string) =
     |> List.tryFind File.Exists
     |> function
         | Some executable -> executable
-        | None -> failwithf "The executable paht '%s' was not found" tool
+        | None -> failwithf "The executable path '%s' was not found" tool
 
 let dotnet = executablePath "dotnet"
 let npm = executablePath "npm"

@@ -10,47 +10,58 @@ let private wrapStrict strictMode element =
 let private pageView pathMode currentUrl (navigate: string -> HistoryMode -> unit) =
     let title =
         match currentUrl with
-        | [] | [ "home" ] -> "Home"
+        | []
+        | [ "home" ] -> "Home"
         | [ "users"; Route.Int userId ] -> sprintf "User %d" userId
         | [ "search"; Route.Query [ "q", query ] ] -> "Search: " + query
         | _ -> "Not found"
 
-    Html.div [
-        Html.h1 [ prop.testId "page"; prop.text title ]
-        Html.button [
-            prop.testId "push-user"
-            prop.text "Open user"
-            prop.onClick (fun _ -> navigate "/users/7" HistoryMode.PushState)
+    Html.div
+        [
+            Html.h1 [ prop.testId "page"; prop.text title ]
+            Html.button
+                [
+                    prop.testId "push-user"
+                    prop.text "Open user"
+                    prop.onClick (fun _ -> navigate "/users/7" HistoryMode.PushState)
+                ]
+            Html.button
+                [
+                    prop.testId "replace-home"
+                    prop.text "Replace with home"
+                    prop.onClick (fun _ -> navigate "/home" HistoryMode.ReplaceState)
+                ]
+            Html.a
+                [
+                    prop.testId "native-link"
+                    prop.href (if pathMode then "#details" else Router.format "/users/8")
+                    prop.text "Follow fragment link"
+                ]
         ]
-        Html.button [
-            prop.testId "replace-home"
-            prop.text "Replace with home"
-            prop.onClick (fun _ -> navigate "/home" HistoryMode.ReplaceState)
-        ]
-        Html.a [
-            prop.testId "native-link"
-            prop.href (if pathMode then "#details" else Router.format "/users/8")
-            prop.text "Follow fragment link"
-        ]
-    ]
 
 let private routerView pathMode currentUrl onUrlChanged navigate =
-    React.router [
-        if pathMode then router.pathMode else router.hashMode
-        router.onUrlChanged onUrlChanged
-        router.children (pageView pathMode currentUrl navigate)
-    ]
+    React.router
+        [
+            if pathMode then router.pathMode else router.hashMode
+            router.onUrlChanged onUrlChanged
+            router.children (pageView pathMode currentUrl navigate)
+        ]
 
 [<ReactComponent>]
 let private StatefulRouter (pathMode: bool) (notifications: ResizeArray<string list>) =
     // Start empty so the initial router notification must render the deep-linked page.
     let currentUrl, setCurrentUrl = React.useState<string list>([])
+
     let onUrlChanged segments =
         notifications.Add segments
         setCurrentUrl segments
+
     let navigate (page: string) (mode: HistoryMode) =
-        if pathMode then Router.navigatePath(page, mode)
-        else Router.navigate(page, mode)
+        if pathMode then
+            Router.navigatePath (page, mode)
+        else
+            Router.navigate (page, mode)
+
     routerView pathMode currentUrl onUrlChanged navigate
 
 let mountReact (root: IReactRoot) pathMode strictMode notifications =
@@ -64,6 +75,7 @@ type private Message =
 let startElmish (root: IReactRoot) pathMode strictMode (notifications: ResizeArray<string list>) =
     let mutable dispatchMessage: Dispatch<Message> = ignore
     let init () = [], Cmd.none
+
     let update message currentUrl =
         match message with
         | UrlChanged segments ->
@@ -71,13 +83,16 @@ let startElmish (root: IReactRoot) pathMode strictMode (notifications: ResizeArr
             segments, Cmd.none
         | Navigate(page, mode) ->
             let command =
-                if pathMode then Cmd.navigatePath(page, mode)
-                else Cmd.navigate(page, mode)
+                if pathMode then
+                    Cmd.navigatePath (page, mode)
+                else
+                    Cmd.navigate (page, mode)
+
             currentUrl, command
         | Stop -> currentUrl, Cmd.none
+
     let view currentUrl dispatch =
-        routerView pathMode currentUrl (UrlChanged >> dispatch)
-            (fun page mode -> dispatch (Navigate(page, mode)))
+        routerView pathMode currentUrl (UrlChanged >> dispatch) (fun page mode -> dispatch (Navigate(page, mode)))
 
     Program.mkProgram init update view
     // Own the React root in the test harness so it can always be unmounted.

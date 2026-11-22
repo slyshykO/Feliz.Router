@@ -2,5 +2,11 @@
     "FSharp.showExplorerOnStartup": false,
     "FSharp.simplifyNameAnalyzer": false,
     "FSharp.linter": false,
-    "FSharp.lineLens.enabled": "never"
+    "FSharp.lineLens.enabled": "never",
+    "cSpell.words": [
+        "encodeQueryStringInts",
+        "hashchange",
+        "popstate",
+        "xplat"
+    ]
 }
